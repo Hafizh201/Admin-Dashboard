@@ -1,0 +1,420 @@
+Buatkan web dashboard admin responsive untuk project “Smart Borrowing System Berbasis IoT Menggunakan ESP32”.
+
+Web ini digunakan untuk monitoring database Google Sheets melalui Google Apps Script Web App. Frontend harus berjalan sebagai web biasa dan mengambil data dari URL Apps Script berikut:
+
+https://script.google.com/macros/s/AKfycbwsquXFtrhmz_vFFeTOoU6AiwIwYvmIH21hlTH6URUfZ5KNDKt897xY1b-Sm_mUU3Ou/exec
+
+Gunakan JavaScript `fetch()` untuk request ke URL tersebut. Jangan gunakan backend lain seperti Node.js, Express, PHP, Firebase, Supabase, MongoDB, MySQL, atau database lain.
+
+PENTING:
+Jangan menambah field atau kolom baru. Gunakan struktur database yang sudah ada.
+
+Struktur sheet asli:
+
+Sheet `Data`:
+
+* `Nama`
+* `Level`
+* `uid`
+* `Kadaluarsa`
+* `kelas`
+
+Sheet `Riwayat`:
+
+* `uidpeminjam`
+* `Idbarang`
+* `nama`
+* `kelas`
+* `mode`
+* `waktu`
+* `Perpanjang`
+
+Sheet `Barang`:
+
+* `Column 1` sebagai UID barang
+* `namabarang`
+* `kategori`
+* `dipinjam`
+* `lastuser`
+* `lastkelas`
+* `lastupdate`
+* `lastuid`
+
+Catatan penting:
+Walaupun di sheet `Barang` kolom UID barang bernama `Column 1`, di API gunakan nama field `uidbarang`. Jangan tampilkan tulisan `Column 1` di UI. Tampilkan sebagai “UID Barang”.
+
+Gunakan helper API berikut:
+
+```javascript
+const API_URL = "https://script.google.com/macros/s/AKfycbyDlUHBa-YPsv2EN3iprkSMPLdWC7o_hZ80ixXnux1huALJmeFB0a-Uxh5L-F7g7ObH/exec";
+
+async function api(payload) {
+  const response = await fetch(API_URL, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return {
+      ok: false,
+      error: "Response dari server bukan JSON.",
+      raw: text
+    };
+  }
+}
+```
+
+Buat hasil akhir berupa satu file `index.html` lengkap berisi HTML, CSS, dan JavaScript dalam satu file.
+
+Fitur utama:
+
+1. Login Admin
+
+* Tampilkan halaman login PIN.
+* Saat login, panggil:
+
+```javascript
+api({ action: "login", pin })
+```
+
+* Jika berhasil, simpan PIN ke `sessionStorage`.
+* Semua request berikutnya wajib menyertakan PIN.
+* PIN default: `123456`.
+
+2. Dashboard
+   Setelah login, panggil:
+
+```javascript
+api({ action: "bootstrap", pin })
+```
+
+Response berisi:
+
+* `data.data` dari sheet `Data`
+* `data.barang` dari sheet `Barang`
+* `data.riwayat` dari sheet `Riwayat`
+* `data.stats` untuk statistik dashboard
+
+Tampilkan statistik:
+
+* Total siswa
+* Siswa aktif
+* Siswa kadaluarsa
+* Total barang
+* Barang tersedia
+* Barang dipinjam
+* Total riwayat
+* Riwayat hari ini
+* Total mode Pinjam
+* Total mode Kembali
+* Total mode Perpanjang
+
+3. Grafik Dashboard
+   Gunakan Chart.js CDN untuk:
+
+* Grafik kategori barang
+* Grafik status barang dari field `dipinjam`
+* Grafik mode riwayat dari field `mode`
+* Grafik aktivitas 7 hari terakhir dari field `waktu`
+
+Gunakan data:
+
+```javascript
+stats.kategori_barang
+stats.status_barang
+stats.mode_riwayat
+stats.aktivitas_7_hari
+```
+
+4. Halaman Data Siswa
+   Data berasal dari sheet `Data`.
+
+Di API, field yang dipakai:
+
+* `nama`
+* `level`
+* `uid`
+* `Kadaluarsa`
+* `kelas`
+
+Tabel hanya berisi:
+
+* Nama
+* Level
+* UID
+* Kadaluarsa
+* Kelas
+* Aksi
+
+Fitur:
+
+* Tambah siswa
+* Edit siswa
+* Search berdasarkan nama, level, UID, Kadaluarsa, dan kelas
+
+Action:
+
+```javascript
+api({ action: "getData", pin })
+api({ action: "addData", pin, data })
+api({ action: "updateData", pin, uid, data })
+```
+
+Format tambah/update siswa:
+
+```javascript
+{
+  nama: "Nama Siswa",
+  level: "Siswa",
+  uid: "c7 6e 03 07",
+  Kadaluarsa: "2026-12-31",
+  kelas: "8J"
+}
+```
+
+5. Halaman Barang
+   Data berasal dari sheet `Barang`.
+
+Di API, field yang dipakai:
+
+* `uidbarang`
+* `namabarang`
+* `kategori`
+* `dipinjam`
+* `lastuser`
+* `lastkelas`
+* `lastupdate`
+* `lastuid`
+
+Tabel hanya berisi:
+
+* UID Barang
+* Nama Barang
+* Kategori
+* Dipinjam
+* Last User
+* Last Kelas
+* Last Update
+* Last UID
+* Aksi
+
+Fitur:
+
+* Tambah barang
+* Edit barang
+* Filter kategori
+* Filter status dipinjam
+* Search berdasarkan uidbarang, namabarang, kategori, lastuser, lastkelas, dan lastuid
+
+Action:
+
+```javascript
+api({ action: "getBarang", pin })
+api({ action: "addBarang", pin, data })
+api({ action: "updateBarang", pin, uidbarang, data })
+api({ action: "setBarangStatus", pin, uidbarang, dipinjam })
+```
+
+Format tambah/update barang:
+
+```javascript
+{
+  uidbarang: "BRG001",
+  namabarang: "Kamera Sony A7 II",
+  kategori: "Kamera",
+  dipinjam: "false",
+  lastuser: "",
+  lastkelas: "",
+  lastupdate: "",
+  lastuid: ""
+}
+```
+
+Field `dipinjam` boleh berisi:
+
+* `true`
+* `false`
+* `Dipinjam`
+* `Tersedia`
+
+Di UI tampilkan sebagai badge:
+
+* Tersedia: hijau
+* Dipinjam: biru
+
+6. Halaman Riwayat
+   Data berasal dari sheet `Riwayat`.
+
+Field:
+
+* `uidpeminjam`
+* `Idbarang`
+* `nama`
+* `kelas`
+* `mode`
+* `waktu`
+* `Perpanjang`
+
+Tabel hanya berisi:
+
+* UID Peminjam
+* ID Barang
+* Nama
+* Kelas
+* Mode
+* Waktu
+* Perpanjang
+
+Fitur:
+
+* Filter tanggal/waktu
+* Filter mode
+* Search nama, kelas, UID peminjam, dan ID barang
+
+Action:
+
+```javascript
+api({ action: "getRiwayat", pin })
+api({ action: "addRiwayat", pin, data })
+```
+
+Format tambah riwayat:
+
+```javascript
+{
+  uidpeminjam: "c7 6e 03 07",
+  Idbarang: "BRG001",
+  nama: "Nama Siswa",
+  kelas: "8J",
+  mode: "Pinjam",
+  waktu: "2026-06-04 09:30:00",
+  Perpanjang: ""
+}
+```
+
+Mode riwayat:
+
+* Pinjam
+* Kembali
+* Perpanjang
+* Update
+
+7. Halaman Peminjaman Aktif
+   Peminjaman aktif diambil dari sheet `Barang`, yaitu data dengan `dipinjam` bernilai `true`, `1`, `ya`, atau `Dipinjam`.
+
+Tampilkan:
+
+* UID Barang
+* Nama Barang
+* Kategori
+* Last User
+* Last Kelas
+* Last UID
+* Last Update
+* Tombol Kembalikan
+* Tombol Perpanjang
+
+Saat tombol Kembalikan diklik:
+
+```javascript
+api({ action: "returnBarang", pin, uidbarang })
+```
+
+Saat tombol Perpanjang diklik:
+
+```javascript
+api({ action: "perpanjang", pin, uidbarang, Perpanjang })
+```
+
+8. Form Pinjam Manual
+   Buat halaman atau modal untuk input peminjaman manual.
+
+Field:
+
+* UID peminjam
+* UID barang
+* Perpanjang
+
+Saat submit:
+
+```javascript
+api({
+  action: "pinjamBarang",
+  pin,
+  uidpeminjam,
+  uidbarang,
+  Perpanjang
+})
+```
+
+9. Pengaturan
+   Tampilkan:
+
+* Nama sistem: Smart Borrowing System
+* Sheet siswa: Data
+* Sheet barang: Barang
+* Sheet riwayat: Riwayat
+* URL API
+* Tombol refresh data
+* Tombol logout
+* Tombol test koneksi API
+
+Untuk test koneksi:
+
+```javascript
+api({ action: "login", pin })
+```
+
+10. Desain UI
+    Buat UI modern, bersih, serius, profesional, dan responsive.
+
+Ketentuan:
+
+* Sidebar desktop
+* Hamburger menu atau bottom navigation mobile
+* Warna utama biru tua, putih, abu muda, hijau
+* Font Inter atau Poppins
+* Card statistik modern
+* Tabel responsive
+* Modal form tambah/edit
+* Toast notification
+* Loading state
+* Empty state
+* Konfirmasi sebelum pinjam, kembalikan, atau perpanjang
+* Badge warna status
+
+Badge:
+
+* Tersedia: hijau
+* Dipinjam: biru
+* Pinjam: biru
+* Kembali: hijau
+* Perpanjang: kuning
+* Update: abu-abu
+* Kadaluarsa: merah
+* Aktif: hijau
+
+11. Error Handling
+    Jika API mengembalikan:
+
+```javascript
+{ ok: false, error: "..." }
+```
+
+tampilkan pesan error tersebut.
+
+Jika fetch gagal, tampilkan:
+“Gagal terhubung ke server Apps Script. Periksa URL API, deployment Apps Script, atau koneksi internet.”
+
+Jika data kosong, tampilkan empty state yang rapi.
+
+Catatan paling penting:
+
+* Jangan gunakan field `id_siswa`, `id_barang`, `id_riwayat`, `created_at`, `updated_at`, `status`, `catatan`, atau field lain yang tidak ada.
+* Jangan tampilkan `Column 1` di UI. Gunakan label “UID Barang”.
+* Semua tabel dan form harus mengikuti struktur database yang disebutkan.
+* Hasil akhir harus langsung bisa dipakai sebagai `index.html`.
