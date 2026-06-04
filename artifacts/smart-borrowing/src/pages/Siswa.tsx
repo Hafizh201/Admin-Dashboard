@@ -5,6 +5,7 @@ import { useToast } from "@/components/Toast";
 import { Plus, Search, Edit2, Loader2, Users, X } from "lucide-react";
 import { useProgressiveRows } from "@/hooks/useProgressiveRows";
 import SortToggle from "@/components/SortToggle";
+import SyncButton from "@/components/SyncButton";
 import { getSortMode, setSortMode, CACHE_KEYS } from "@/lib/cache";
 
 const EMPTY: Siswa = { nama: "", level: "Siswa", uid: "", Kadaluarsa: "", kelas: "" };
@@ -58,7 +59,7 @@ export default function SiswaPage() {
     try {
       if (editUid) {
         await updateSiswaItem(editUid, form);
-        showToast("Data siswa diperbarui.", "success");
+        showToast("Data user diperbarui.", "success");
       } else {
         if (siswa.find(s => s.uid === form.uid)) {
           showToast("UID sudah terdaftar.", "error");
@@ -66,7 +67,7 @@ export default function SiswaPage() {
           return;
         }
         await addSiswa(form);
-        showToast("Siswa ditambahkan (menyinkronkan...).", "success");
+        showToast("User ditambahkan (menyinkronkan...).", "success");
       }
       setShowModal(false);
     } finally {
@@ -78,12 +79,15 @@ export default function SiswaPage() {
     <div className="page-transition space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-primary" />Data Siswa</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{siswa.length} siswa terdaftar</p>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-primary" />Data User</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{siswa.length} user terdaftar</p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
-          <Plus className="w-4 h-4" />Tambah Siswa
-        </button>
+        <div className="flex items-center gap-2">
+          <SyncButton />
+          <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
+            <Plus className="w-4 h-4" />Tambah User
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -108,8 +112,8 @@ export default function SiswaPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Users className="w-10 h-10 mb-3 opacity-30" />
-            <p className="text-sm font-medium">Tidak ada data siswa</p>
-            <p className="text-xs mt-1">{search ? "Coba ubah kata kunci" : "Tambah siswa untuk memulai"}</p>
+            <p className="text-sm font-medium">Tidak ada data user</p>
+            <p className="text-xs mt-1">{search ? "Coba ubah kata kunci" : "Tambah user untuk memulai"}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -161,7 +165,7 @@ export default function SiswaPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-card-border rounded-2xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h2 className="text-base font-semibold">{editUid ? "Edit Siswa" : "Tambah Siswa"}</h2>
+              <h2 className="text-base font-semibold">{editUid ? "Edit User" : "Tambah User"}</h2>
               <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
@@ -171,7 +175,7 @@ export default function SiswaPage() {
                     {field === "Kadaluarsa" ? "Kadaluarsa (tahun atau YYYY-MM-DD)" : field}
                   </label>
                   <input
-                    type={field === "Kadaluarsa" ? "text" : "text"}
+                    type="text"
                     value={form[field]}
                     onChange={e => setForm({ ...form, [field]: e.target.value })}
                     required={field !== "kelas"}
