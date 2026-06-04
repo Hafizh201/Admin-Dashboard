@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useData } from "@/contexts/DataContext";
 import { useToast } from "@/components/Toast";
 import { PlusCircle, Loader2, AlertTriangle, X } from "lucide-react";
+import SyncButton from "@/components/SyncButton";
 
 export default function PinjamManual() {
   const { pinjamBarangItem, barang, siswa } = useData();
@@ -27,17 +28,19 @@ export default function PinjamManual() {
     }
   };
 
-  // Look up siswa and barang info for confirmation preview
   const siswaInfo = siswa.find(s => s.uid === form.uidpeminjam);
   const barangInfo = barang.find(b => b.uidbarang === form.uidbarang);
 
   return (
     <div className="page-transition max-w-lg">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <PlusCircle className="w-5 h-5 text-primary" />Form Pinjam Manual
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Input peminjaman barang secara manual</p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <PlusCircle className="w-5 h-5 text-primary" />Form Pinjam Manual
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Input peminjaman barang secara manual</p>
+        </div>
+        <SyncButton />
       </div>
 
       <div className="bg-card border border-card-border rounded-xl shadow-xs p-6">
