@@ -19,7 +19,7 @@ export async function api<T = unknown>(payload: Record<string, unknown>): Promis
 
     try {
       const json = JSON.parse(text);
-      return json;
+      return normalizeApiResponse(payload, json) as ApiResponse<T>;
     } catch {
       return {
         ok: false,
@@ -90,6 +90,78 @@ export interface BootstrapData {
   riwayat?: Riwayat[];
   stats?: Stats;
   settings?: Record<string, unknown>;
+}
+
+function normalizeApiResponse(payload: Record<string, unknown>, response: unknown) {
+  const res = response as ApiResponse<BootstrapData>;
+
+  if (!res || !res.ok || !res.data) return response;
+
+  const action = String(payload.action || "").toLowerCase();
+  if (action !== "bootstrap" && action !== "getdashboard") return response;
+
+  const boot = res.data;
+  const siswa = boot.siswa ?? boot.data ?? [];
+  const barang = boot.barang ?? [];
+  const riwayat = boot.riwayat ?? [];
+
+  boot.stats = buildClientStats(siswa, barang, riwayat, boot.stats);
+
+  return res;
+}
+
+function countBy<T extends Record<string, unknown>>(rows: T[], field: keyof T): Record<string, number> {
+  return rows.reduce<Record<string, number>>((acc, row) => {
+    const key = String(row[field] || "Kosong");
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function activityLast7Days(rows: Riwayat[]): Record<string, number> {
+  const result: Record<string, number> = {};
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    result[key] = 0;
+  }
+
+  rows.forEach((row) => {
+    const key = String(row.waktu || "").slice(0, 10);
+    if (Object.prototype.hasOwnProperty.call(result, key)) result[key] += 1;
+  });
+
+  return result;
+}
+
+function buildClientStats(siswa: Siswa[], barang: Barang[], riwayat: Riwayat[], serverStats?: Stats): Stats {
+  const siswaKadaluarsa = siswa.filter((s) => isKadaluarsa(s.Kadaluarsa)).length;
+  const barangDipinjam = barang.filter((b) => isDipinjam(b.dipinjam)).length;
+  const today = new Date().toISOString().slice(0, 10);
+
+  return {
+    ...(serverStats || {}),
+    total_siswa: siswa.length,
+    siswa_aktif: siswa.length - siswaKadaluarsa,
+    siswa_kadaluarsa: siswaKadaluarsa,
+    total_barang: barang.length,
+    barang_dipinjam: barangDipinjam,
+    barang_tersedia: barang.length - barangDipinjam,
+    total_riwayat: riwayat.length,
+    riwayat_hari_ini: riwayat.filter((r) => String(r.waktu || "").startsWith(today)).length,
+    total_pinjam: riwayat.filter((r) => String(r.mode || "").toLowerCase() === "pinjam").length,
+    total_kembali: riwayat.filter((r) => String(r.mode || "").toLowerCase() === "kembali").length,
+    total_perpanjang: riwayat.filter((r) => String(r.mode || "").toLowerCase() === "perpanjang").length,
+    kategori_barang: countBy(barang, "kategori"),
+    status_barang: {
+      Tersedia: barang.length - barangDipinjam,
+      Dipinjam: barangDipinjam,
+    },
+    mode_riwayat: countBy(riwayat, "mode"),
+    aktivitas_7_hari: activityLast7Days(riwayat),
+  };
 }
 
 export function isDipinjam(value: unknown): boolean {
