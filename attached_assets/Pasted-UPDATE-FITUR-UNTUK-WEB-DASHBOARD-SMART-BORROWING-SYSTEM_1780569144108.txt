@@ -1,0 +1,352 @@
+UPDATE FITUR UNTUK WEB DASHBOARD SMART BORROWING SYSTEM
+
+Tambahkan sistem performa dan sinkronisasi data seperti berikut. Jangan ubah struktur database, jangan tambah kolom baru, dan tetap gunakan API Apps Script yang sudah ada.
+
+API URL:
+https://script.google.com/macros/s/AKfycbwsquXFtrhmz_vFFeTOoU6AiwIwYvmIH21hlTH6URUfZ5KNDKt897xY1b-Sm_mUU3Ou/exec
+
+Gunakan tetap fungsi:
+
+```javascript
+async function api(payload) {
+  const response = await fetch(API_URL, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return {
+      ok: false,
+      error: "Response dari server bukan JSON.",
+      raw: text
+    };
+  }
+}
+```
+
+## 1. Optimistic UI
+
+Saat user melakukan aksi seperti:
+
+* tambah siswa
+* edit siswa
+* tambah barang
+* edit barang
+* pinjam barang manual
+* kembalikan barang
+* perpanjang barang
+* tambah riwayat
+
+maka UI harus langsung berubah tanpa menunggu response Apps Script.
+
+Contoh:
+
+* Saat barang dipinjam, tabel langsung menampilkan barang sebagai “Dipinjam”.
+* Saat barang dikembalikan, tabel langsung menampilkan barang sebagai “Tersedia”.
+* Saat tambah data, data langsung muncul di tabel.
+* Saat update data, baris langsung berubah.
+
+Setelah UI berubah, simpan aksi ke antrean lokal, lalu upload ke Apps Script secara background.
+
+## 2. Local Cache
+
+Gunakan localStorage atau IndexedDB untuk menyimpan cache data terakhir.
+
+Minimal cache yang harus disimpan:
+
+```javascript
+cache_data
+cache_barang
+cache_riwayat
+cache_stats
+cache_last_update
+```
+
+Saat web dibuka:
+
+1. Tampilkan data dari cache terlebih dahulu jika ada.
+2. Tampilkan indikator kecil “Memuat data terbaru...”.
+3. Ambil data terbaru dari API menggunakan:
+
+```javascript
+api({ action: "bootstrap", pin })
+```
+
+4. Setelah data berhasil diambil, update cache dan refresh UI.
+5. Jika API gagal, tetap tampilkan data cache dan beri pesan:
+   “Menampilkan data terakhir yang tersimpan. Sinkronisasi akan dicoba ulang.”
+
+Jangan tampilkan loading kosong terlalu lama jika cache tersedia.
+
+## 3. Background Sync Queue
+
+Buat sistem antrean upload lokal.
+
+Nama localStorage:
+
+```javascript
+pending_sync_queue
+```
+
+Setiap aksi yang mengubah data harus masuk ke queue dengan format:
+
+```javascript
+{
+  id: "local-" + Date.now(),
+  action: "pinjamBarang",
+  payload: {...},
+  status: "pending",
+  createdAt: new Date().toISOString(),
+  retry: 0
+}
+```
+
+Status queue:
+
+* `pending`
+* `uploading`
+* `synced`
+* `failed`
+
+Buat fungsi:
+
+```javascript
+addToSyncQueue(action, payload)
+processSyncQueue()
+```
+
+`processSyncQueue()` berjalan otomatis:
+
+* saat halaman dibuka
+* setelah user melakukan aksi
+* setiap 5 sampai 10 detik
+* saat koneksi internet kembali online
+
+Gunakan:
+
+```javascript
+window.addEventListener("online", processSyncQueue);
+```
+
+Upload queue satu per satu, jangan sekaligus, agar Apps Script tidak berat.
+
+Jika upload berhasil:
+
+* ubah status menjadi `synced`
+* hapus item dari queue
+* refresh data terkait dari API secara perlahan
+
+Jika upload gagal:
+
+* ubah status menjadi `failed`
+* tambah nilai `retry`
+* jangan hapus dari queue
+* coba ulang otomatis beberapa detik kemudian
+
+## 4. Indikator Sinkronisasi
+
+Tambahkan indikator kecil di navbar/header:
+
+* “Semua data tersinkron” jika queue kosong
+* “Menyinkronkan 3 data...” jika masih ada antrean
+* “Ada data belum terkirim” jika ada item failed
+
+Indikator ini jangan mengganggu user, cukup kecil dan rapi.
+
+## 5. Reload Setelah Upload Berhasil
+
+Setelah queue berhasil upload, jangan reload seluruh halaman secara kasar.
+
+Gunakan refresh data halus:
+
+```javascript
+refreshDataSilent()
+```
+
+Fungsi ini mengambil ulang `bootstrap`, lalu:
+
+* update cache
+* update tabel
+* update statistik
+* update grafik
+
+Tampilkan perubahan tanpa membuat halaman berkedip.
+
+## 6. Progressive Table Rendering
+
+Untuk tabel besar, jangan render semua data sekaligus.
+
+Gunakan metode bertahap:
+
+* render 30 sampai 50 baris pertama
+* lalu tambahkan batch berikutnya dengan `setTimeout` atau `requestAnimationFrame`
+* tampilkan teks kecil “Menampilkan 50 dari 500 data...”
+
+Ini berlaku untuk:
+
+* tabel Data
+* tabel Barang
+* tabel Riwayat
+
+Tujuannya agar UI terasa cepat walaupun data banyak.
+
+## 7. Default Urutan Tabel: Data Terbaru di Atas
+
+Karena data terbaru biasanya berada di baris bawah Google Sheet, maka default tampilan web harus membalik urutan data.
+
+Default:
+
+```javascript
+newestFirst = true
+```
+
+Artinya:
+
+* data paling bawah dari sheet tampil paling atas di tabel web
+* riwayat terbaru tampil paling atas
+* barang/data terbaru juga tampil paling atas
+
+Implementasikan dengan:
+
+```javascript
+const displayedRows = newestFirst ? [...rows].reverse() : [...rows];
+```
+
+## 8. Tombol Urutan Tabel
+
+Tambahkan tombol toggle di setiap tabel:
+
+Label:
+
+* “Terbaru di atas”
+* “Terlama di atas”
+
+Saat diklik, ubah mode urutan tabel.
+
+Simpan preferensi ke localStorage:
+
+```javascript
+table_sort_mode_data
+table_sort_mode_barang
+table_sort_mode_riwayat
+```
+
+Default semua tabel:
+
+```javascript
+"newest_first"
+```
+
+Tombol ini harus ada di:
+
+* halaman Data Siswa
+* halaman Barang
+* halaman Riwayat
+* halaman Peminjaman Aktif
+
+## 9. Data Sementara di UI
+
+Data yang belum berhasil upload ke server harus tetap tampil di UI dengan tanda kecil.
+
+Contoh badge:
+
+* “Belum terkirim”
+* “Menyinkronkan”
+* “Gagal sinkron”
+
+Namun badge ini cukup kecil dan tidak mengganggu.
+
+Jika user refresh halaman, data pending tetap muncul karena tersimpan di localStorage.
+
+## 10. Validasi Agar Tidak Duplikat
+
+Sebelum menambah data ke UI/cache lokal:
+
+* cek `uid` untuk Data
+* cek `uidbarang` untuk Barang
+* cek kombinasi `uidpeminjam`, `Idbarang`, `mode`, dan `waktu` untuk Riwayat
+
+Jangan tampilkan duplikat di tabel.
+
+## 11. Fallback Saat Offline
+
+Jika browser offline:
+
+* user tetap bisa melihat data dari cache
+* user tetap bisa membuat aksi
+* aksi masuk ke queue
+* upload ditunda sampai online
+
+Tampilkan status kecil:
+“Offline — perubahan akan dikirim saat koneksi kembali.”
+
+## 12. Jangan Ubah Struktur Database
+
+Tetap gunakan field yang sudah ada.
+
+Data:
+
+```javascript
+nama
+level
+uid
+Kadaluarsa
+kelas
+```
+
+Barang:
+
+```javascript
+uidbarang
+namabarang
+kategori
+dipinjam
+lastuser
+lastkelas
+lastupdate
+lastuid
+```
+
+Riwayat:
+
+```javascript
+uidpeminjam
+Idbarang
+nama
+kelas
+mode
+waktu
+Perpanjang
+```
+
+Jangan gunakan:
+
+```javascript
+id_siswa
+id_barang
+id_riwayat
+created_at
+updated_at
+status
+catatan
+```
+
+## 13. Tujuan UX
+
+Web harus terasa cepat seperti sistem lokal:
+
+* data langsung muncul
+* tabel tidak menunggu loading lama
+* perubahan langsung terlihat
+* upload berjalan di background
+* setelah sukses, data disinkronkan ulang dari server
+
+Namun tetap aman:
+
+* data pending tidak hilang saat refresh
+* data gagal upload bisa dicoba ulang
+* cache selalu diperbarui setelah server berhasil merespons

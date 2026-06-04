@@ -1,6 +1,7 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { DataProvider } from "@/contexts/DataContext";
 import { ToastProvider } from "@/components/Toast";
 import Layout from "@/components/Layout";
 import Login from "@/pages/Login";
@@ -29,18 +30,20 @@ function AppRoutes() {
   if (!isAuthenticated) return <Login />;
 
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/siswa" component={SiswaPage} />
-        <Route path="/barang" component={BarangPage} />
-        <Route path="/riwayat" component={RiwayatPage} />
-        <Route path="/peminjaman" component={PeminjamanAktif} />
-        <Route path="/pinjam-manual" component={PinjamManual} />
-        <Route path="/pengaturan" component={Pengaturan} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <DataProvider>
+      <Layout>
+        <Switch>
+          <Route path="/" component={Dashboard} />
+          <Route path="/siswa" component={SiswaPage} />
+          <Route path="/barang" component={BarangPage} />
+          <Route path="/riwayat" component={RiwayatPage} />
+          <Route path="/peminjaman" component={PeminjamanAktif} />
+          <Route path="/pinjam-manual" component={PinjamManual} />
+          <Route path="/pengaturan" component={Pengaturan} />
+          <Route component={NotFound} />
+        </Switch>
+      </Layout>
+    </DataProvider>
   );
 }
 

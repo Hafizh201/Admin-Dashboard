@@ -1,13 +1,11 @@
-import { useEffect, useState } from "react";
-import { api, BootstrapData, isDipinjam } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/components/Toast";
+import { useData } from "@/contexts/DataContext";
+import { isDipinjam } from "@/lib/api";
 import {
   Users, Package, BookOpen, Activity, TrendingUp, RefreshCw, Loader2,
-  UserCheck, UserX, CheckCircle, Clock, BarChart2, ArrowUpRight, RotateCcw
+  UserCheck, UserX, CheckCircle, Clock, BarChart2, ArrowUpRight, RotateCcw, Info,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from "recharts";
 
 const COLORS = ["#1d4ed8", "#16a34a", "#ca8a04", "#9333ea", "#dc2626", "#0891b2", "#ea580c"];
@@ -37,59 +35,35 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 export default function Dashboard() {
-  const { pin } = useAuth();
-  const { showToast } = useToast();
-  const [data, setData] = useState<BootstrapData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { siswa, barang, riwayat, stats, isLoading, isFromCache, lastUpdate, refreshSilent } = useData();
 
-  const fetchData = async () => {
-    setLoading(true);
-    const res = await api<BootstrapData>({ action: "bootstrap", pin });
-    setLoading(false);
-    if (res.ok && res.data) {
-      setData(res.data);
-    } else {
-      showToast(res.error || "Gagal memuat data dashboard.", "error");
-    }
-  };
-
-  useEffect(() => { fetchData(); }, []);
-
-  if (loading) return (
+  if (isLoading && !siswa.length && !barang.length) return (
     <div className="flex items-center justify-center h-64">
       <Loader2 className="w-8 h-8 animate-spin text-primary" />
     </div>
   );
 
-  const stats = data?.stats;
-
-  // Use explicit stats fields from API, fall back to computing from raw data
-  const siswaList = data?.siswa ?? data?.data ?? [];
-  const barangList = data?.barang ?? [];
-  const riwayatList = data?.riwayat ?? [];
   const now = new Date();
   const today = new Date().toISOString().slice(0, 10);
 
-  const totalSiswa = stats?.total_siswa ?? siswaList.length;
-  const siswaAktif = stats?.siswa_aktif ?? siswaList.filter(s => new Date(s.Kadaluarsa) >= now).length;
+  const totalSiswa = stats?.total_siswa ?? siswa.length;
+  const siswaAktif = stats?.siswa_aktif ?? siswa.filter(s => new Date(s.Kadaluarsa) >= now).length;
   const siswaKadaluarsa = stats?.siswa_kadaluarsa ?? (totalSiswa - siswaAktif);
-  const totalBarang = stats?.total_barang ?? barangList.length;
-  const barangDipinjam = stats?.barang_dipinjam ?? barangList.filter(b => isDipinjam(b.dipinjam)).length;
+  const totalBarang = stats?.total_barang ?? barang.length;
+  const barangDipinjam = stats?.barang_dipinjam ?? barang.filter(b => isDipinjam(b.dipinjam)).length;
   const barangTersedia = stats?.barang_tersedia ?? (totalBarang - barangDipinjam);
-  const totalRiwayat = stats?.total_riwayat ?? riwayatList.length;
-  const riwayatHariIni = stats?.riwayat_hari_ini ?? riwayatList.filter(r => r.waktu?.startsWith(today)).length;
-  const modePinjam = stats?.total_pinjam ?? riwayatList.filter(r => r.mode === "Pinjam").length;
-  const modeKembali = stats?.total_kembali ?? riwayatList.filter(r => r.mode === "Kembali").length;
-  const modePerpanjang = stats?.total_perpanjang ?? riwayatList.filter(r => r.mode === "Perpanjang").length;
+  const totalRiwayat = stats?.total_riwayat ?? riwayat.length;
+  const riwayatHariIni = stats?.riwayat_hari_ini ?? riwayat.filter(r => r.waktu?.startsWith(today)).length;
+  const modePinjam = stats?.total_pinjam ?? riwayat.filter(r => r.mode === "Pinjam").length;
+  const modeKembali = stats?.total_kembali ?? riwayat.filter(r => r.mode === "Kembali").length;
+  const modePerpanjang = stats?.total_perpanjang ?? riwayat.filter(r => r.mode === "Perpanjang").length;
 
   const kategoriData = stats?.kategori_barang
     ? Object.entries(stats.kategori_barang).map(([name, value]) => ({ name, value }))
     : [];
-
   const statusData = stats?.status_barang
     ? Object.entries(stats.status_barang).map(([name, value]) => ({ name, value }))
     : [{ name: "Tersedia", value: barangTersedia }, { name: "Dipinjam", value: barangDipinjam }];
-
   const modeData = stats?.mode_riwayat
     ? Object.entries(stats.mode_riwayat).map(([name, value]) => ({ name, value }))
     : [
@@ -97,7 +71,6 @@ export default function Dashboard() {
         { name: "Kembali", value: modeKembali },
         { name: "Perpanjang", value: modePerpanjang },
       ];
-
   const aktivitasData = stats?.aktivitas_7_hari
     ? Object.entries(stats.aktivitas_7_hari).map(([name, value]) => ({ name: name.slice(5), value }))
     : [];
@@ -110,13 +83,20 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-0.5">Smart Borrowing System — Monitoring IoT</p>
         </div>
         <button
-          onClick={fetchData}
+          onClick={refreshSilent}
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium bg-card border border-border rounded-lg hover:bg-accent transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
           <span className="hidden sm:inline">Refresh</span>
         </button>
       </div>
+
+      {isFromCache && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-xs font-medium">
+          <Info className="w-3.5 h-3.5 flex-shrink-0" />
+          Menampilkan data dari cache. Memuat data terbaru...
+        </div>
+      )}
 
       {/* Siswa */}
       <div>
@@ -165,18 +145,13 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         )}
-
-        {modeData.length > 0 && (
+        {modeData.filter(m => m.value > 0).length > 0 && (
           <div className="bg-card border border-card-border rounded-xl p-5 shadow-xs">
             <SectionTitle>Mode Riwayat</SectionTitle>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie
-                  data={modeData} dataKey="value" nameKey="name"
-                  cx="50%" cy="50%" outerRadius={70}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={false} fontSize={11}
-                >
+                <Pie data={modeData.filter(m => m.value > 0)} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11}>
                   {modeData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
@@ -184,7 +159,6 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         )}
-
         {kategoriData.length > 0 && (
           <div className="bg-card border border-card-border rounded-xl p-5 shadow-xs">
             <SectionTitle>Kategori Barang</SectionTitle>
@@ -200,18 +174,13 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         )}
-
-        {statusData.length > 0 && (
+        {statusData.filter(s => s.value > 0).length > 0 && (
           <div className="bg-card border border-card-border rounded-xl p-5 shadow-xs">
             <SectionTitle>Status Barang</SectionTitle>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie
-                  data={statusData} dataKey="value" nameKey="name"
-                  cx="50%" cy="50%" outerRadius={70}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={false} fontSize={11}
-                >
+                <Pie data={statusData.filter(s => s.value > 0)} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11}>
                   {statusData.map((_, i) => <Cell key={i} fill={["#16a34a", "#1d4ed8"][i % 2]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
@@ -220,15 +189,19 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         )}
-
-        {aktivitasData.length === 0 && modeData.length === 0 && kategoriData.length === 0 && statusData.length === 0 && (
+        {aktivitasData.length === 0 && modeData.every(m => m.value === 0) && (
           <div className="lg:col-span-2 bg-card border border-card-border rounded-xl flex flex-col items-center justify-center py-16 text-muted-foreground">
             <BarChart2 className="w-10 h-10 mb-3 opacity-30" />
             <p className="text-sm font-medium">Belum ada data grafik</p>
-            <p className="text-xs mt-1">Data grafik akan muncul setelah ada aktivitas</p>
           </div>
         )}
       </div>
+
+      {lastUpdate && (
+        <p className="text-xs text-muted-foreground/50 text-right">
+          Terakhir diperbarui: {new Date(lastUpdate).toLocaleString("id-ID")}
+        </p>
+      )}
     </div>
   );
 }

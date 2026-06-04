@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
-import { api, Riwayat } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState, useMemo } from "react";
+import { Riwayat } from "@/lib/api";
+import { useData } from "@/contexts/DataContext";
 import { useToast } from "@/components/Toast";
 import { Search, Loader2, ClipboardList, Filter, Plus, X } from "lucide-react";
+import { useProgressiveRows } from "@/hooks/useProgressiveRows";
+import SortToggle from "@/components/SortToggle";
+import { getSortMode, setSortMode, CACHE_KEYS } from "@/lib/cache";
 
 const MODES = ["Pinjam", "Kembali", "Perpanjang", "Update"];
 
@@ -20,57 +23,60 @@ function ModeBadge({ mode }: { mode: string }) {
   );
 }
 
-const EMPTY: Riwayat = {
-  uidpeminjam: "", Idbarang: "", nama: "", kelas: "",
-  mode: "Pinjam", waktu: "", Perpanjang: "",
-};
+function Badge({ children, color }: { children: React.ReactNode; color: string }) {
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${color}`}>{children}</span>;
+}
+
+function SyncBadge({ localId, pendingIds, failedIds }: { localId?: string; pendingIds: Set<string>; failedIds: Set<string> }) {
+  if (!localId) return null;
+  if (failedIds.has(localId)) return <Badge color="bg-red-100 text-red-600">Gagal sinkron</Badge>;
+  if (pendingIds.has(localId)) return <Badge color="bg-yellow-100 text-yellow-600">Menyinkronkan</Badge>;
+  return null;
+}
+
+const EMPTY: Riwayat = { uidpeminjam: "", Idbarang: "", nama: "", kelas: "", mode: "Pinjam", waktu: "", Perpanjang: "" };
 
 export default function RiwayatPage() {
-  const { pin } = useAuth();
+  const { riwayat, addRiwayatItem, isLoading, pendingIds, failedIds } = useData();
   const { showToast } = useToast();
-  const [data, setData] = useState<Riwayat[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<Riwayat>(EMPTY);
+  const [sortMode, setSortModeState] = useState<"newest_first" | "oldest_first">(() =>
+    getSortMode(CACHE_KEYS.sortRiwayat)
+  );
 
-  const fetchData = async () => {
-    setLoading(true);
-    const res = await api<{ riwayat: Riwayat[] } | Riwayat[]>({ action: "getRiwayat", pin });
-    setLoading(false);
-    if (res.ok && res.data) {
-      const d = res.data as any;
-      setData(Array.isArray(d?.riwayat) ? d.riwayat : Array.isArray(d) ? d : []);
-    } else {
-      showToast(res.error || "Gagal memuat riwayat.", "error");
-    }
+  const handleSortChange = (mode: "newest_first" | "oldest_first") => {
+    setSortModeState(mode);
+    setSortMode(CACHE_KEYS.sortRiwayat, mode);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  const filtered = useMemo(() => {
+    const sorted = sortMode === "newest_first" ? [...riwayat].reverse() : [...riwayat];
+    return sorted.filter(r => {
+      const matchSearch = !search || [r.uidpeminjam, r.Idbarang, r.nama, r.kelas, r.mode, r.waktu, r.Perpanjang]
+        .some(v => v?.toLowerCase().includes(search.toLowerCase()));
+      const matchMode = !filterMode || r.mode === filterMode;
+      const matchDate = !filterDate || r.waktu?.startsWith(filterDate);
+      return matchSearch && matchMode && matchDate;
+    });
+  }, [riwayat, search, filterMode, filterDate, sortMode]);
 
-  const filtered = data.filter(r => {
-    const matchSearch = !search || [r.uidpeminjam, r.Idbarang, r.nama, r.kelas]
-      .some(v => v?.toLowerCase().includes(search.toLowerCase()));
-    const matchMode = !filterMode || r.mode === filterMode;
-    const matchDate = !filterDate || r.waktu?.startsWith(filterDate);
-    return matchSearch && matchMode && matchDate;
-  });
+  const { rows, hasMore, total, shown } = useProgressiveRows(filtered);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const res = await api({ action: "addRiwayat", pin, data: form });
-    setSaving(false);
-    if (res.ok) {
-      showToast("Riwayat berhasil ditambahkan.", "success");
+    try {
+      await addRiwayatItem(form);
+      showToast("Riwayat ditambahkan (menyinkronkan...).", "success");
       setShowModal(false);
       setForm(EMPTY);
-      fetchData();
-    } else {
-      showToast(res.error || "Gagal menyimpan riwayat.", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -79,7 +85,7 @@ export default function RiwayatPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><ClipboardList className="w-5 h-5 text-primary" />Riwayat</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{data.length} entri riwayat</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{riwayat.length} entri riwayat</p>
         </div>
         <button onClick={() => { setForm(EMPTY); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
           <Plus className="w-4 h-4" />Tambah Riwayat
@@ -90,32 +96,35 @@ export default function RiwayatPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
-            type="search" placeholder="Cari nama, UID peminjam, ID barang, kelas..."
+            type="search" placeholder="Cari nama, UID peminjam, ID barang..."
             value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <select value={filterMode} onChange={e => setFilterMode(e.target.value)}
             className="py-2 pl-3 pr-8 text-sm bg-card border border-border rounded-lg focus:outline-none focus:border-primary/50">
             <option value="">Semua Mode</option>
             {MODES.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
-          <input
-            type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
-            className="py-2 px-3 text-sm bg-card border border-border rounded-lg focus:outline-none focus:border-primary/50"
-          />
-          {filterDate && (
-            <button onClick={() => setFilterDate("")} className="text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <div className="flex items-center gap-1.5">
+            <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+              className="py-2 px-3 text-sm bg-card border border-border rounded-lg focus:outline-none focus:border-primary/50" />
+            {filterDate && (
+              <button onClick={() => setFilterDate("")} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+            )}
+          </div>
+          <SortToggle mode={sortMode} onChange={handleSortChange} />
         </div>
       </div>
 
+      {hasMore && (
+        <p className="text-xs text-muted-foreground px-1">Menampilkan {shown} dari {total} data...</p>
+      )}
+
       <div className="bg-card border border-card-border rounded-xl shadow-xs overflow-hidden">
-        {loading ? (
+        {isLoading && !riwayat.length ? (
           <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -134,17 +143,25 @@ export default function RiwayatPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((r, i) => (
-                  <tr key={i} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{r.uidpeminjam || "-"}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{r.Idbarang || "-"}</td>
-                    <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">{r.nama || "-"}</td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{r.kelas || "-"}</td>
-                    <td className="px-4 py-3"><ModeBadge mode={r.mode} /></td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.waktu || "-"}</td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.Perpanjang || "-"}</td>
-                  </tr>
-                ))}
+                {rows.map((r, i) => {
+                  const localId = (r as any)._localId as string | undefined;
+                  return (
+                    <tr key={i} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          {r.uidpeminjam || "-"}
+                          <SyncBadge localId={localId} pendingIds={pendingIds} failedIds={failedIds} />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{r.Idbarang || "-"}</td>
+                      <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">{r.nama || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{r.kelas || "-"}</td>
+                      <td className="px-4 py-3"><ModeBadge mode={r.mode} /></td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.waktu || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.Perpanjang || "-"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -169,28 +186,22 @@ export default function RiwayatPage() {
               ] as { field: keyof Riwayat; label: string }[]).map(({ field, label }) => (
                 <div key={field}>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
-                  <input
-                    type="text"
-                    value={form[field]}
+                  <input type="text" value={form[field]}
                     onChange={e => setForm({ ...form, [field]: e.target.value })}
                     required={field === "uidpeminjam" || field === "Idbarang" || field === "nama"}
-                    className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
-                  />
+                    className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
                 </div>
               ))}
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Mode</label>
-                <select
-                  value={form.mode}
-                  onChange={e => setForm({ ...form, mode: e.target.value })}
-                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary/50"
-                >
+                <select value={form.mode} onChange={e => setForm({ ...form, mode: e.target.value })}
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary/50">
                   {MODES.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-muted transition-colors">Batal</button>
-                <button type="submit" disabled={saving} className="flex-1 px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2">
+                <button type="submit" disabled={saving} className="flex-1 px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}{saving ? "Menyimpan..." : "Simpan"}
                 </button>
               </div>
