@@ -1,5 +1,5 @@
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbyDlUHBa-YPsv2EN3iprkSMPLdWC7o_hZ80ixXnux1huALJmeFB0a-Uxh5L-F7g7ObH/exec";
+  "https://script.google.com/macros/s/AKfycbzESFzQlXoEoYX4xHCa35jQHzwhILd5axxovkxbLxMJar8SSlRZAHytsC3ZiD_Stw62/exec";
 
 export interface ApiResponse<T = unknown> {
   ok: boolean;
@@ -66,17 +66,30 @@ export interface Riwayat {
 }
 
 export interface Stats {
-  kategori_barang: Record<string, number>;
-  status_barang: Record<string, number>;
-  mode_riwayat: Record<string, number>;
-  aktivitas_7_hari: Record<string, number>;
+  total_siswa?: number;
+  siswa_aktif?: number;
+  siswa_kadaluarsa?: number;
+  total_barang?: number;
+  barang_tersedia?: number;
+  barang_dipinjam?: number;
+  total_riwayat?: number;
+  riwayat_hari_ini?: number;
+  total_pinjam?: number;
+  total_kembali?: number;
+  total_perpanjang?: number;
+  kategori_barang?: Record<string, number>;
+  status_barang?: Record<string, number>;
+  mode_riwayat?: Record<string, number>;
+  aktivitas_7_hari?: Record<string, number>;
 }
 
 export interface BootstrapData {
-  data: Siswa[];
-  barang: Barang[];
-  riwayat: Riwayat[];
-  stats: Stats;
+  data?: Siswa[];
+  siswa?: Siswa[];
+  barang?: Barang[];
+  riwayat?: Riwayat[];
+  stats?: Stats;
+  settings?: Record<string, unknown>;
 }
 
 export function isDipinjam(value: string): boolean {

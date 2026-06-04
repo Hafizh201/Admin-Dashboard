@@ -2,9 +2,10 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/Toast";
-import { Settings, RefreshCw, LogOut, Wifi, WifiOff, Loader2, Copy, Check } from "lucide-react";
+import { Settings, RefreshCw, LogOut, Wifi, WifiOff, Loader2, Copy, Check, Bug } from "lucide-react";
 
-const API_URL = "https://script.google.com/macros/s/AKfycbyDlUHBa-YPsv2EN3iprkSMPLdWC7o_hZ80ixXnux1huALJmeFB0a-Uxh5L-F7g7ObH/exec";
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbzESFzQlXoEoYX4xHCa35jQHzwhILd5axxovkxbLxMJar8SSlRZAHytsC3ZiD_Stw62/exec";
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -15,7 +16,9 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   };
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-3 border-b border-border last:border-0">
-      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider w-36 flex-shrink-0">{label}</span>
+      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider w-40 flex-shrink-0">
+        {label}
+      </span>
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <span className="text-sm text-foreground font-medium truncate">{value}</span>
         <button
@@ -35,12 +38,14 @@ export default function Pengaturan() {
   const { showToast } = useToast();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"idle" | "success" | "error">("idle");
+  const [debugging, setDebugging] = useState(false);
+  const [debugData, setDebugData] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const handleTestKoneksi = async () => {
     setTesting(true);
     setTestResult("idle");
-    const res = await api({ action: "login", pin });
+    const res = await api({ action: "health", pin });
     setTesting(false);
     if (res.ok) {
       setTestResult("success");
@@ -48,6 +53,19 @@ export default function Pengaturan() {
     } else {
       setTestResult("error");
       showToast(res.error || "Koneksi gagal.", "error");
+    }
+  };
+
+  const handleDebugHeader = async () => {
+    setDebugging(true);
+    setDebugData(null);
+    const res = await api({ action: "debugHeaders", pin });
+    setDebugging(false);
+    if (res.ok) {
+      setDebugData(JSON.stringify(res.data ?? res, null, 2));
+      showToast("Debug header berhasil.", "success");
+    } else {
+      showToast(res.error || "Gagal debug header.", "error");
     }
   };
 
@@ -87,6 +105,8 @@ export default function Pengaturan() {
           <InfoRow label="Sheet Siswa" value="Data" />
           <InfoRow label="Sheet Barang" value="Barang" />
           <InfoRow label="Sheet Riwayat" value="Riwayat" />
+          <InfoRow label="UID Barang (Sheet)" value="Column 1" />
+          <InfoRow label="UID Barang (API)" value="uidbarang" />
           <InfoRow label="URL API" value={API_URL} />
         </div>
       </div>
@@ -94,34 +114,65 @@ export default function Pengaturan() {
       {/* Test Koneksi */}
       <div className="bg-card border border-card-border rounded-xl shadow-xs overflow-hidden">
         <div className="px-6 py-4 border-b border-border bg-muted/30">
-          <h2 className="text-sm font-semibold text-foreground">Koneksi API</h2>
+          <h2 className="text-sm font-semibold text-foreground">Koneksi & Diagnostik</h2>
         </div>
         <div className="px-6 py-5 space-y-4">
           <p className="text-sm text-muted-foreground">
-            Test koneksi ke Google Apps Script untuk memastikan API dapat diakses dengan benar.
+            Test koneksi dan debug header untuk memastikan API dapat diakses dengan benar.
           </p>
+
           {testResult !== "idle" && (
-            <div className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium ${
-              testResult === "success"
-                ? "bg-green-50 border border-green-200 text-green-800"
-                : "bg-red-50 border border-red-200 text-red-800"
-            }`}>
-              {testResult === "success"
-                ? <><Wifi className="w-4 h-4" />Koneksi berhasil — API dapat dijangkau</>
-                : <><WifiOff className="w-4 h-4" />Koneksi gagal — periksa URL atau deployment</>
-              }
+            <div
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium ${
+                testResult === "success"
+                  ? "bg-green-50 border border-green-200 text-green-800"
+                  : "bg-red-50 border border-red-200 text-red-800"
+              }`}
+            >
+              {testResult === "success" ? (
+                <><Wifi className="w-4 h-4" />Koneksi berhasil — API dapat dijangkau</>
+              ) : (
+                <><WifiOff className="w-4 h-4" />Koneksi gagal — periksa URL atau deployment</>
+              )}
             </div>
           )}
-          <button
-            onClick={handleTestKoneksi}
-            disabled={testing}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
-          >
-            {testing
-              ? <><Loader2 className="w-4 h-4 animate-spin" />Testing...</>
-              : <><Wifi className="w-4 h-4" />Test Koneksi API</>
-            }
-          </button>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleTestKoneksi}
+              disabled={testing}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
+            >
+              {testing ? (
+                <><Loader2 className="w-4 h-4 animate-spin" />Testing...</>
+              ) : (
+                <><Wifi className="w-4 h-4" />Test Koneksi API</>
+              )}
+            </button>
+
+            <button
+              onClick={handleDebugHeader}
+              disabled={debugging}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-card border border-border rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
+            >
+              {debugging ? (
+                <><Loader2 className="w-4 h-4 animate-spin" />Debugging...</>
+              ) : (
+                <><Bug className="w-4 h-4" />Debug Header</>
+              )}
+            </button>
+          </div>
+
+          {debugData && (
+            <div className="mt-3">
+              <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                Debug Output
+              </p>
+              <pre className="bg-muted/60 border border-border rounded-lg p-4 text-xs text-foreground overflow-x-auto whitespace-pre-wrap break-all max-h-64">
+                {debugData}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
 
@@ -136,10 +187,11 @@ export default function Pengaturan() {
             disabled={refreshing}
             className="flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold border border-border bg-background rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
           >
-            {refreshing
-              ? <><Loader2 className="w-4 h-4 animate-spin" />Refreshing...</>
-              : <><RefreshCw className="w-4 h-4" />Refresh Data</>
-            }
+            {refreshing ? (
+              <><Loader2 className="w-4 h-4 animate-spin" />Refreshing...</>
+            ) : (
+              <><RefreshCw className="w-4 h-4" />Refresh Data</>
+            )}
           </button>
           <button
             onClick={handleLogout}
