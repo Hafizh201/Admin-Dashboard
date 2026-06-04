@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Siswa } from "@/lib/api";
+import { Siswa, isKadaluarsa } from "@/lib/api";
 import { useData } from "@/contexts/DataContext";
 import { useToast } from "@/components/Toast";
 import { Plus, Search, Edit2, Loader2, Users, X } from "lucide-react";
@@ -11,11 +11,6 @@ const EMPTY: Siswa = { nama: "", level: "Siswa", uid: "", Kadaluarsa: "", kelas:
 
 function Badge({ children, color }: { children: React.ReactNode; color: string }) {
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${color}`}>{children}</span>;
-}
-
-function isKadaluarsa(d: string) {
-  if (!d) return false;
-  return new Date(d) < new Date();
 }
 
 function SyncBadge({ localId, pendingIds, failedIds }: { localId?: string; pendingIds: Set<string>; failedIds: Set<string> }) {
@@ -173,14 +168,15 @@ export default function SiswaPage() {
               {(["nama", "uid", "Kadaluarsa", "kelas"] as (keyof Siswa)[]).map(field => (
                 <div key={field}>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5 capitalize">
-                    {field === "Kadaluarsa" ? "Kadaluarsa (YYYY-MM-DD)" : field}
+                    {field === "Kadaluarsa" ? "Kadaluarsa (tahun atau YYYY-MM-DD)" : field}
                   </label>
                   <input
-                    type={field === "Kadaluarsa" ? "date" : "text"}
+                    type={field === "Kadaluarsa" ? "text" : "text"}
                     value={form[field]}
                     onChange={e => setForm({ ...form, [field]: e.target.value })}
                     required={field !== "kelas"}
                     disabled={field === "uid" && !!editUid}
+                    placeholder={field === "Kadaluarsa" ? "Contoh: 2027 atau 2027-12-31" : undefined}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 disabled:opacity-50"
                   />
                 </div>
