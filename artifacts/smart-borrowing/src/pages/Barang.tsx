@@ -5,6 +5,7 @@ import { useToast } from "@/components/Toast";
 import { Plus, Search, Edit2, Loader2, Package, X, Filter } from "lucide-react";
 import { useProgressiveRows } from "@/hooks/useProgressiveRows";
 import SortToggle from "@/components/SortToggle";
+import SyncButton from "@/components/SyncButton";
 import { getSortMode, setSortMode, CACHE_KEYS } from "@/lib/cache";
 
 const EMPTY: Barang = {
@@ -94,9 +95,12 @@ export default function BarangPage() {
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><Package className="w-5 h-5 text-primary" />Barang</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{barang.length} barang terdaftar</p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
-          <Plus className="w-4 h-4" />Tambah Barang
-        </button>
+        <div className="flex items-center gap-2">
+          <SyncButton />
+          <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
+            <Plus className="w-4 h-4" />Tambah Barang
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
