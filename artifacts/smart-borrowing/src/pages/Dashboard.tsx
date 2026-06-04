@@ -1,5 +1,5 @@
 import { useData } from "@/contexts/DataContext";
-import { isDipinjam } from "@/lib/api";
+import { isDipinjam, isSiswaAktif } from "@/lib/api";
 import {
   Users, Package, BookOpen, Activity, TrendingUp, RefreshCw, Loader2,
   UserCheck, UserX, CheckCircle, Clock, BarChart2, ArrowUpRight, RotateCcw, Info,
@@ -43,12 +43,14 @@ export default function Dashboard() {
     </div>
   );
 
-  const now = new Date();
   const today = new Date().toISOString().slice(0, 10);
 
-  const totalSiswa = stats?.total_siswa ?? siswa.length;
-  const siswaAktif = stats?.siswa_aktif ?? siswa.filter(s => new Date(s.Kadaluarsa) >= now).length;
-  const siswaKadaluarsa = stats?.siswa_kadaluarsa ?? (totalSiswa - siswaAktif);
+  // Siswa dihitung langsung dari data tabel supaya aturan tahun Kadaluarsa selalu konsisten.
+  // 2026 aktif sampai akhir 2026, baru kadaluarsa mulai 2027.
+  const totalSiswa = siswa.length;
+  const siswaAktif = siswa.filter(isSiswaAktif).length;
+  const siswaKadaluarsa = totalSiswa - siswaAktif;
+
   const totalBarang = stats?.total_barang ?? barang.length;
   const barangDipinjam = stats?.barang_dipinjam ?? barang.filter(b => isDipinjam(b.dipinjam)).length;
   const barangTersedia = stats?.barang_tersedia ?? (totalBarang - barangDipinjam);
@@ -98,17 +100,15 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Siswa */}
       <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Siswa</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">User</p>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          <StatCard label="Total Siswa" value={totalSiswa} icon={Users} color="bg-blue-100 text-blue-700" />
-          <StatCard label="Siswa Aktif" value={siswaAktif} icon={UserCheck} color="bg-green-100 text-green-700" />
-          <StatCard label="Siswa Kadaluarsa" value={siswaKadaluarsa} icon={UserX} color="bg-red-100 text-red-700" />
+          <StatCard label="Total User" value={totalSiswa} icon={Users} color="bg-blue-100 text-blue-700" />
+          <StatCard label="User Aktif" value={siswaAktif} icon={UserCheck} color="bg-green-100 text-green-700" />
+          <StatCard label="User Kadaluarsa" value={siswaKadaluarsa} icon={UserX} color="bg-red-100 text-red-700" />
         </div>
       </div>
 
-      {/* Barang */}
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Barang</p>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -118,7 +118,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Riwayat */}
       <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Riwayat</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -130,7 +129,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {aktivitasData.length > 0 && (
           <div className="bg-card border border-card-border rounded-xl p-5 shadow-xs">
