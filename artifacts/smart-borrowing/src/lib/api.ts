@@ -92,7 +92,46 @@ export interface BootstrapData {
   settings?: Record<string, unknown>;
 }
 
-export function isDipinjam(value: string): boolean {
-  const v = String(value).toLowerCase().trim();
+export function isDipinjam(value: unknown): boolean {
+  const v = String(value ?? "").toLowerCase().trim();
   return v === "true" || v === "1" || v === "ya" || v === "dipinjam";
+}
+
+/**
+ * Aturan kadaluarsa:
+ * - Kosong, "None", atau "-" = tidak kadaluarsa.
+ * - Jika hanya angka tahun, contoh "2026", maka berlaku sampai akhir tahun 2026.
+ *   Baru dianggap kadaluarsa saat sudah masuk 2027.
+ * - Jika format tanggal lengkap, contoh "2026-08-10", maka berlaku sampai akhir hari itu.
+ */
+export function isKadaluarsa(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+
+  const raw = String(value).trim();
+  if (!raw) return false;
+
+  const lower = raw.toLowerCase();
+  if (lower === "none" || lower === "null" || lower === "-" || lower === "tidak") {
+    return false;
+  }
+
+  const now = new Date();
+
+  // Tahun saja, misalnya 2026 / 2027.
+  if (/^\d{4}$/.test(raw)) {
+    const year = Number(raw);
+    const startOfNextYear = new Date(year + 1, 0, 1, 0, 0, 0, 0);
+    return now >= startOfNextYear;
+  }
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return false;
+
+  // Berlaku sampai akhir hari pada tanggal tersebut.
+  date.setHours(23, 59, 59, 999);
+  return now > date;
+}
+
+export function isSiswaAktif(siswa: Pick<Siswa, "Kadaluarsa">): boolean {
+  return !isKadaluarsa(siswa.Kadaluarsa);
 }
