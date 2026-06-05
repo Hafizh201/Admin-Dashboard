@@ -8,7 +8,7 @@ import SortToggle from "@/components/SortToggle";
 import SyncButton from "@/components/SyncButton";
 import { getSortMode, setSortMode, CACHE_KEYS } from "@/lib/cache";
 
-const EMPTY: Siswa = { nama: "", level: "Siswa", uid: "", Kadaluarsa: "", kelas: "" };
+const EMPTY: Siswa = { nama: "", level: "Siswa", uid: "", no_wa: "", Kadaluarsa: "", kelas: "" };
 
 function Badge({ children, color }: { children: React.ReactNode; color: string }) {
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${color}`}>{children}</span>;
@@ -42,7 +42,7 @@ export default function SiswaPage() {
     const sorted = sortMode === "newest_first" ? [...siswa].reverse() : [...siswa];
     if (!search) return sorted;
     return sorted.filter(s =>
-      [s.nama, s.level, s.uid, s.Kadaluarsa, s.kelas].some(v =>
+      [s.nama, s.level, s.uid, s.no_wa, s.Kadaluarsa, s.kelas].some(v =>
         v?.toLowerCase().includes(search.toLowerCase())
       )
     );
@@ -51,7 +51,7 @@ export default function SiswaPage() {
   const { rows, hasMore, total, shown } = useProgressiveRows(filtered);
 
   const openAdd = () => { setForm(EMPTY); setEditUid(null); setShowModal(true); };
-  const openEdit = (s: Siswa) => { setForm({ ...s }); setEditUid(s.uid); setShowModal(true); };
+  const openEdit = (s: Siswa) => { setForm({ ...EMPTY, ...s }); setEditUid(s.uid); setShowModal(true); };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +94,7 @@ export default function SiswaPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
-            type="search" placeholder="Cari nama, UID, kelas, level..."
+            type="search" placeholder="Cari nama, UID, nomor WA, kelas, level..."
             value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
@@ -120,7 +120,7 @@ export default function SiswaPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {["Nama", "Level", "UID", "Kadaluarsa", "Kelas", "Aksi"].map(h => (
+                  {["Nama", "Level", "UID", "No WA", "Kadaluarsa", "Kelas", "Aksi"].map(h => (
                     <th key={h} className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -140,6 +140,7 @@ export default function SiswaPage() {
                         <Badge color={s.level === "Admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}>{s.level || "-"}</Badge>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{s.uid || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{s.no_wa || "-"}</td>
                       <td className="px-4 py-3">
                         <span className={isKadaluarsa(s.Kadaluarsa) ? "text-red-600 font-medium" : "text-foreground"}>
                           {s.Kadaluarsa || "-"}
@@ -169,18 +170,18 @@ export default function SiswaPage() {
               <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
-              {(["nama", "uid", "Kadaluarsa", "kelas"] as (keyof Siswa)[]).map(field => (
+              {(["nama", "uid", "no_wa", "Kadaluarsa", "kelas"] as (keyof Siswa)[]).map(field => (
                 <div key={field}>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5 capitalize">
-                    {field === "Kadaluarsa" ? "Kadaluarsa (tahun atau YYYY-MM-DD)" : field}
+                    {field === "Kadaluarsa" ? "Kadaluarsa (tahun atau YYYY-MM-DD)" : field === "no_wa" ? "Nomor WA" : field}
                   </label>
                   <input
                     type="text"
-                    value={form[field]}
+                    value={form[field] || ""}
                     onChange={e => setForm({ ...form, [field]: e.target.value })}
-                    required={field !== "kelas"}
+                    required={field !== "kelas" && field !== "no_wa"}
                     disabled={field === "uid" && !!editUid}
-                    placeholder={field === "Kadaluarsa" ? "Contoh: 2027 atau 2027-12-31" : undefined}
+                    placeholder={field === "Kadaluarsa" ? "Contoh: 2027 atau 2027-12-31" : field === "no_wa" ? "Contoh: 6281234567890" : undefined}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 disabled:opacity-50"
                   />
                 </div>
