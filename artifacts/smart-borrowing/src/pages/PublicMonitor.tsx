@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbzP6PvRs2LSZ6m3oR5-ZkRkMsOpYUX-wKzS97qpUQDCkyt9gLjqDF4LoBWg7JzloMRI/exec";
+  "https://script.google.com/macros/s/AKfycbwS4VKeeQ4MACC4dy-vnHKCdu3yDb2-TuzgEx53OZFLpiijOoAgMGI2uqfnPReMAIvC/exec";
 
 const CACHE_KEY = "sbs_public_monitor_cache";
 const REFRESH_INTERVAL = 2000;
