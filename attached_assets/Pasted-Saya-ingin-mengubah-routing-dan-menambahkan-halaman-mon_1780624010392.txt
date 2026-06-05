@@ -1,0 +1,353 @@
+Saya ingin mengubah routing dan menambahkan halaman monitoring publik pada project Smart Borrowing Dashboard.
+
+PENTING:
+Jangan menghapus fitur admin yang sudah ada. Jangan mengubah struktur database. Jangan mengubah Apps Script URL. Jangan mengubah nama field database.
+
+Tujuan:
+
+* Halaman utama `/` tidak lagi langsung login admin.
+* Halaman utama `/` menjadi halaman monitoring publik yang bisa dibuka tanpa login.
+* Login admin dipindahkan ke `/admin`.
+* Setelah admin login, dashboard admin tetap berjalan seperti sebelumnya.
+* User umum hanya bisa melihat monitoring, tidak bisa tambah/edit/hapus data.
+
+API Apps Script:
+
+```txt
+https://script.google.com/macros/s/AKfycbzESFzQlXoEoYX4xHCa35jQHzwhILd5axxovkxbLxMJar8SSlRZAHytsC3ZiD_Stw62/exec
+```
+
+## 1. Tambahkan action public di Apps Script
+
+Tambahkan action baru bernama `publicMonitor`.
+
+Action ini tidak perlu PIN dan harus diletakkan sebelum pengecekan PIN admin.
+
+Contoh logika:
+
+```javascript
+function sbsApi(req) {
+  var action = String(req.action || "").trim();
+
+  if (action === "login") {
+    return sbsLogin(req);
+  }
+
+  if (action === "publicMonitor") {
+    return sbsPublicMonitor();
+  }
+
+  if (!sbsCheckPin(req.pin)) {
+    return sbsFail("PIN admin salah atau tidak dikirim.");
+  }
+
+  // action admin lain tetap seperti sebelumnya
+}
+```
+
+Tambahkan fungsi:
+
+```javascript
+function sbsPublicMonitor() {
+  return sbsOk({
+    barang: sbsList("Barang"),
+    riwayat: sbsList("Riwayat")
+  });
+}
+```
+
+Catatan penting:
+
+* `publicMonitor` hanya boleh mengirim data `Barang` dan `Riwayat`.
+* Jangan kirim sheet `Data`.
+* Jangan kirim data user/siswa.
+* Jangan perlu PIN untuk `publicMonitor`.
+* Action lain tetap butuh PIN.
+
+## 2. Ubah routing frontend
+
+Saat ini kalau belum login, app langsung menampilkan halaman login. Ubah agar:
+
+* Route `/` = halaman monitoring publik tanpa login.
+* Route `/admin` = halaman login admin jika belum login.
+* Setelah login admin berhasil, tampilkan dashboard admin.
+* Semua route admin seperti dashboard, data user, barang, riwayat, peminjaman aktif, pinjam manual, pengaturan berada di bawah `/admin`.
+
+Contoh struktur route yang diinginkan:
+
+```txt
+/                         -> Public Monitoring
+/admin                    -> Admin Dashboard atau Login
+/admin/siswa              -> Data User
+/admin/barang             -> Barang Admin
+/admin/riwayat            -> Riwayat Admin
+/admin/peminjaman         -> Peminjaman Aktif
+/admin/pinjam-manual      -> Pinjam Manual
+/admin/pengaturan         -> Pengaturan
+```
+
+Jika admin belum login dan membuka route `/admin/...`, tampilkan Login.
+
+Jika admin sudah login dan membuka `/admin`, tampilkan Dashboard Admin.
+
+Jangan jadikan halaman publik sebagai bagian dari layout admin. Halaman publik harus berdiri sendiri.
+
+## 3. Buat halaman baru Public Monitoring
+
+Buat file baru:
+
+```txt
+src/pages/PublicMonitor.tsx
+```
+
+Halaman ini:
+
+* Tidak membutuhkan login.
+* Tidak menggunakan `DataProvider` admin jika tidak diperlukan.
+* Mengambil data langsung dari Apps Script menggunakan action `publicMonitor`.
+* Tidak boleh menampilkan data user/siswa.
+* Tidak boleh menampilkan tombol admin seperti tambah, edit, hapus, pinjam manual, pengaturan.
+
+Request:
+
+```typescript
+api({
+  action: "publicMonitor"
+})
+```
+
+Response:
+
+```typescript
+{
+  ok: true,
+  data: {
+    barang: [...],
+    riwayat: [...]
+  }
+}
+```
+
+Jika fungsi `api()` di `src/lib/api.ts` saat ini bisa dipakai tanpa PIN, gunakan fungsi itu. Jika tidak, buat helper fetch khusus di halaman PublicMonitor, tetapi jangan mengubah behavior admin lama.
+
+## 4. Data yang ditampilkan di Public Monitoring
+
+Tampilkan ringkasan statistik:
+
+* Total Barang
+* Barang Tersedia
+* Barang Dipinjam
+* Total Riwayat
+
+Tabel Barang hanya menampilkan kolom:
+
+* UID Barang
+* Nama Barang
+* Kategori
+* Status
+* Last User
+* Last Kelas
+* Last Update
+* Last UID
+
+Tabel Riwayat hanya menampilkan kolom:
+
+* UID Peminjam
+* ID Barang
+* Nama
+* Kelas
+* Mode
+* Waktu
+* Perpanjang
+
+Jangan tampilkan:
+
+* Data User
+* Data Siswa
+* Level user
+* Kadaluarsa user
+* tombol tambah
+* tombol edit
+* tombol hapus
+* pinjam manual
+* pengaturan
+
+## 5. Refresh cepat dan responsif
+
+Halaman Public Monitoring harus terasa realtime.
+
+Aturan:
+
+* Saat halaman pertama dibuka, tampilkan cache dari localStorage jika ada.
+* Setelah itu fetch data terbaru dari Apps Script.
+* Lakukan auto-refresh diam-diam setiap 2 detik.
+* Jangan reload halaman penuh.
+* Jika data baru terdeteksi, update tabel otomatis.
+* Tampilkan notifikasi kecil:
+  “Data baru terdeteksi, tabel diperbarui otomatis.”
+* Tampilkan indikator:
+
+  * Online / Offline
+  * Sedang sync
+  * Terakhir sinkron
+* Tambahkan tombol Sync manual.
+
+Gunakan cache localStorage dengan key:
+
+```typescript
+sbs_public_monitor_cache
+```
+
+Simpan:
+
+```typescript
+{
+  barang: [...],
+  riwayat: [...],
+  updatedAt: "ISO_DATE"
+}
+```
+
+## 6. Sort, search, dan filter
+
+Default tabel harus menampilkan data terbaru di atas.
+
+Karena data terbaru biasanya berada di baris bawah Google Sheet, default render harus:
+
+```typescript
+const displayedRows = newestFirst ? [...rows].reverse() : [...rows];
+```
+
+Tambahkan tombol sort untuk masing-masing tabel:
+
+* Terbaru di atas
+* Terlama di atas
+
+Tabel Barang:
+
+* Search berdasarkan UID Barang, Nama Barang, Kategori, Last User, Last Kelas, Last UID.
+* Filter status:
+
+  * Semua
+  * Tersedia
+  * Dipinjam
+
+Tabel Riwayat:
+
+* Search berdasarkan UID Peminjam, ID Barang, Nama, Kelas, Mode, Waktu, Perpanjang.
+* Filter mode:
+
+  * Semua
+  * Pinjam
+  * Kembali
+  * Perpanjang
+  * Update
+
+## 7. Logika status
+
+Barang dianggap dipinjam jika field `dipinjam` bernilai:
+
+* `true`
+* `1`
+* `ya`
+* `Dipinjam`
+
+Selain itu dianggap tersedia.
+
+Badge:
+
+* Tersedia = hijau
+* Dipinjam = biru
+* Pinjam = biru
+* Kembali = hijau
+* Perpanjang = kuning
+* Update = abu-abu
+
+## 8. Desain halaman publik
+
+Buat desain modern, bersih, profesional, dan responsive.
+
+Ketentuan:
+
+* Halaman publik tidak memakai sidebar admin.
+* Pakai header/sticky navbar sederhana.
+* Ada judul “Monitoring Smart Borrowing”.
+* Ada subtitle “Halaman publik monitoring barang dan riwayat peminjaman”.
+* Ada tombol “Login Admin” yang mengarah ke `/admin`.
+* Background abu muda.
+* Card putih.
+* Tabel responsive dengan horizontal scroll di mobile.
+* Gunakan gaya yang selaras dengan dashboard admin.
+* Jangan terlalu ramai.
+
+## 9. Admin route
+
+Pastikan tombol login admin di halaman publik mengarah ke:
+
+```txt
+/admin
+```
+
+Setelah admin login, navigasi admin harus menggunakan prefix `/admin`.
+
+Contoh:
+
+* Dashboard admin `/admin`
+* Data User `/admin/siswa`
+* Barang `/admin/barang`
+* Riwayat `/admin/riwayat`
+* Peminjaman Aktif `/admin/peminjaman`
+* Pinjam Manual `/admin/pinjam-manual`
+* Pengaturan `/admin/pengaturan`
+
+Jika admin logout, arahkan ke `/admin`, bukan `/`.
+
+## 10. Batasan penting
+
+Jangan mengubah field database:
+Barang:
+
+* uidbarang
+* namabarang
+* kategori
+* dipinjam
+* lastuser
+* lastkelas
+* lastupdate
+* lastuid
+
+Riwayat:
+
+* uidpeminjam
+* Idbarang
+* nama
+* kelas
+* mode
+* waktu
+* Perpanjang
+
+Data/User:
+
+* nama
+* level
+* uid
+* Kadaluarsa
+* kelas
+
+Jangan menambahkan field baru seperti:
+
+* id
+* created_at
+* updated_at
+* status
+* catatan
+
+Jangan menaruh PIN admin di halaman publik.
+
+Hasil akhir:
+
+* `/` membuka halaman monitoring publik.
+* `/admin` membuka login/admin dashboard.
+* Public monitoring otomatis refresh setiap 2 detik jika ada perubahan.
+* Public monitoring hanya read-only.
+* Admin lama tetap berfungsi.

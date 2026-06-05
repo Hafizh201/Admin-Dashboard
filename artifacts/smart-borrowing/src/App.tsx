@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, Router } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DataProvider } from "@/contexts/DataContext";
@@ -12,47 +12,53 @@ import RiwayatPage from "@/pages/Riwayat";
 import PeminjamanAktif from "@/pages/PeminjamanAktif";
 import PinjamManual from "@/pages/PinjamManual";
 import Pengaturan from "@/pages/Pengaturan";
+import PublicMonitor from "@/pages/PublicMonitor";
 
 const queryClient = new QueryClient();
 
-function NotFound() {
+function AdminSection() {
+  const { isAuthenticated } = useAuth();
+
   return (
-    <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-      <p className="text-4xl font-bold mb-2">404</p>
-      <p className="text-sm">Halaman tidak ditemukan</p>
-    </div>
+    <Router base="/admin">
+      {!isAuthenticated ? (
+        <Login />
+      ) : (
+        <DataProvider>
+          <Layout>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/siswa" component={SiswaPage} />
+              <Route path="/barang" component={BarangPage} />
+              <Route path="/riwayat" component={RiwayatPage} />
+              <Route path="/peminjaman" component={PeminjamanAktif} />
+              <Route path="/pinjam-manual" component={PinjamManual} />
+              <Route path="/pengaturan" component={Pengaturan} />
+            </Switch>
+          </Layout>
+        </DataProvider>
+      )}
+    </Router>
   );
 }
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const [location] = useLocation();
 
-  if (!isAuthenticated) return <Login />;
+  if (location.startsWith("/admin")) {
+    return <AdminSection />;
+  }
 
-  return (
-    <DataProvider>
-      <Layout>
-        <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route path="/siswa" component={SiswaPage} />
-          <Route path="/barang" component={BarangPage} />
-          <Route path="/riwayat" component={RiwayatPage} />
-          <Route path="/peminjaman" component={PeminjamanAktif} />
-          <Route path="/pinjam-manual" component={PinjamManual} />
-          <Route path="/pengaturan" component={Pengaturan} />
-          <Route component={NotFound} />
-        </Switch>
-      </Layout>
-    </DataProvider>
-  );
+  return <PublicMonitor />;
 }
 
 function App() {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <WouterRouter base={base}>
             <AppRoutes />
           </WouterRouter>
         </AuthProvider>
