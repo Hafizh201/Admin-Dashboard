@@ -1,5 +1,5 @@
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbwS4VKeeQ4MACC4dy-vnHKCdu3yDb2-TuzgEx53OZFLpiijOoAgMGI2uqfnPReMAIvC/exec";
+  "https://script.google.com/macros/s/AKfycbwDWGybmMrZ-an8DU_1ktklelaY2dYJuJqUU96V4QGysaBusymAg3YfiFtZG9nUj34ybg/exec";
 
 export interface ApiResponse<T = unknown> {
   ok: boolean;
