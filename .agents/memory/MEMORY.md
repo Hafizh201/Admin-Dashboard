@@ -1,0 +1,1 @@
+- [GitHub sync workflow](github-sync.md) — User edits on GitHub, pulls to Replit, then asks agent to observe and integrate changes.
