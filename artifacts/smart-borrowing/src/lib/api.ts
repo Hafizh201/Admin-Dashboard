@@ -40,6 +40,7 @@ export interface Siswa {
   nama: string;
   level: string;
   uid: string;
+  no_wa?: string;
   Kadaluarsa: string;
   kelas: string;
 }
