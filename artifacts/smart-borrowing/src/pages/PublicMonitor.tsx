@@ -51,6 +51,18 @@ interface CachePayload {
   updatedAt: string;
 }
 
+function isLoginOnlyRow(row: RiwayatRow) {
+  const mode = String(row.mode || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+  return mode === "login only" || mode === "loginonly" || mode.includes("login only");
+}
+
+function sanitizePublicData(data: { barang: BarangRow[]; riwayat: RiwayatRow[] }) {
+  return {
+    barang: data.barang ?? [],
+    riwayat: (data.riwayat ?? []).filter((row) => !isLoginOnlyRow(row)),
+  };
+}
+
 async function fetchPublicMonitor(): Promise<{ barang: BarangRow[]; riwayat: RiwayatRow[] }> {
   const res = await fetch(API_URL, {
     method: "POST",
@@ -62,10 +74,10 @@ async function fetchPublicMonitor(): Promise<{ barang: BarangRow[]; riwayat: Riw
 
   if (!json.ok) throw new Error(json.error || "Server error");
 
-  return {
+  return sanitizePublicData({
     barang: json.data?.barang ?? [],
     riwayat: json.data?.riwayat ?? [],
-  };
+  });
 }
 
 function readCache(): CachePayload | null {
@@ -176,11 +188,12 @@ export default function PublicMonitor() {
   }, []);
 
   const applyData = useCallback((data: { barang: BarangRow[]; riwayat: RiwayatRow[] }, silent = false) => {
-    const fp = fingerprint(data);
+    const safeData = sanitizePublicData(data);
+    const fp = fingerprint(safeData);
     if (fp !== lastFingerprintRef.current) {
       lastFingerprintRef.current = fp;
-      setBarang(data.barang);
-      setRiwayat(data.riwayat);
+      setBarang(safeData.barang);
+      setRiwayat(safeData.riwayat);
       if (silent) showNewDataToast();
     }
   }, [showNewDataToast]);
@@ -236,6 +249,7 @@ export default function PublicMonitor() {
   const filteredRiwayat = useMemo(() => {
     const sorted = riwayatSort === "newest" ? [...riwayat].reverse() : [...riwayat];
     return sorted.filter((r) => {
+      if (isLoginOnlyRow(r)) return false;
       const matchSearch = !riwayatSearch || [r.Idbarang, r.nama, r.kelas, r.mode, r.waktu, r.Perpanjang].some((v) => String(v || "").toLowerCase().includes(riwayatSearch.toLowerCase()));
       const matchMode = !riwayatMode || r.mode === riwayatMode;
       const matchDate = !riwayatDate || String(r.waktu || "").startsWith(riwayatDate);
