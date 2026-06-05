@@ -1,5 +1,5 @@
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbwDWGybmMrZ-an8DU_1ktklelaY2dYJuJqUU96V4QGysaBusymAg3YfiFtZG9nUj34ybg/exec";
+  "https://script.google.com/macros/s/AKfycbwUIf0AFmqdgAB_8qtOSb34X5f1JtcfxdOsFsz3qU2K5qQdIaT9HX3kJPvDc2IgQN7DtA/exec";
 
 export interface ApiResponse<T = unknown> {
   ok: boolean;
@@ -166,7 +166,7 @@ function buildClientStats(siswa: Siswa[], barang: Barang[], riwayat: Riwayat[], 
 
 export function isDipinjam(value: unknown): boolean {
   const v = String(value ?? "").toLowerCase().trim();
-  return v === "true" || v === "1" || v === "ya" || v === "dipinjam";
+  return v === "true" || v === "1" || v === "ya" || v === "dipinjam" || v === "pinjam";
 }
 
 /**
