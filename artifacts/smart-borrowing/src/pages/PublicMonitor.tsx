@@ -110,14 +110,15 @@ function StatusBadge({ value }: { value: string }) {
 }
 
 function ModeBadge({ mode }: { mode: string }) {
+  const normalized = String(mode || "").trim().toLowerCase();
   const colors: Record<string, string> = {
-    Pinjam: "bg-blue-100 text-blue-700",
-    Kembali: "bg-green-100 text-green-700",
-    Perpanjang: "bg-yellow-100 text-yellow-700",
-    Update: "bg-gray-100 text-gray-600",
+    pinjam: "bg-red-100 text-red-700",
+    kembali: "bg-green-100 text-green-700",
+    perpanjang: "bg-yellow-100 text-yellow-700",
+    update: "bg-gray-100 text-gray-600",
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${colors[mode] || "bg-gray-100 text-gray-600"}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${colors[normalized] || "bg-gray-100 text-gray-600"}`}>
       {mode || "—"}
     </span>
   );
