@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbzESFzQlXoEoYX4xHCa35jQHzwhILd5axxovkxbLxMJar8SSlRZAHytsC3ZiD_Stw62/exec";
+  "https://script.google.com/macros/s/AKfycbzP6PvRs2LSZ6m3oR5-ZkRkMsOpYUX-wKzS97qpUQDCkyt9gLjqDF4LoBWg7JzloMRI/exec";
 
 const CACHE_KEY = "sbs_public_monitor_cache";
 const REFRESH_INTERVAL = 2000;

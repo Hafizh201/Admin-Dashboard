@@ -5,7 +5,7 @@ import { useToast } from "@/components/Toast";
 import { Settings, RefreshCw, LogOut, Wifi, WifiOff, Loader2, Copy, Check, Bug } from "lucide-react";
 
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbzESFzQlXoEoYX4xHCa35jQHzwhILd5axxovkxbLxMJar8SSlRZAHytsC3ZiD_Stw62/exec";
+  "https://script.google.com/macros/s/AKfycbzP6PvRs2LSZ6m3oR5-ZkRkMsOpYUX-wKzS97qpUQDCkyt9gLjqDF4LoBWg7JzloMRI/exec";
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
