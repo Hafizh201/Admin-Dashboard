@@ -4,6 +4,7 @@ export const CACHE_KEYS = {
   data: "cache_data",
   barang: "cache_barang",
   riwayat: "cache_riwayat",
+  perpanjang: "cache_perpanjang",
   stats: "cache_stats",
   lastUpdate: "cache_last_update",
   sortData: "table_sort_mode_data",
