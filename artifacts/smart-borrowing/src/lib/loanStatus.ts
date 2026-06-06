@@ -28,7 +28,6 @@ export function parseLoanDate(value?: string) {
   const raw = String(value).trim();
   if (!raw) return null;
 
-  // ISO / Apps Script default: 2026-06-06 00:00:00 or 2026-06-06T00:00:00
   const isoLike = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
   if (isoLike) {
     const [, y, m, d, hh = "0", mm = "0", ss = "0"] = isoLike;
@@ -36,8 +35,6 @@ export function parseLoanDate(value?: string) {
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
-  // Google Sheet formatted value often appears as 6/6/2026 0:00:00.
-  // Treat it as day/month/year for this Indonesian sheet, not US month/day/year.
   const slashLike = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
   if (slashLike) {
     const [, d, m, y, hh = "0", mm = "0", ss = "0"] = slashLike;
@@ -133,7 +130,16 @@ export function isLoanWithoutExtension(loan: HistoryLike | undefined, history: H
   if (!loan) return false;
   if (!isPinjamMode(loan)) return false;
   if (hasMatchingReturn(loan, history)) return false;
-  return !hasExtensionForLoan(loan, extensions);
+  if (hasExtensionForLoan(loan, extensions)) return false;
+
+  // Penting: belum perpanjang baru dianggap perlu ditandai kalau tenggatnya sudah lewat.
+  // Jadi data PINJAM yang tenggatnya masih lama tidak ikut merah.
+  const deadline = parseLoanDate(loan.Tenggat || getEffectiveDeadline(loan, extensions));
+  return Boolean(deadline && deadline.getTime() < Date.now());
+}
+
+export function isLoanNeedsAttention(loan: HistoryLike | undefined, history: HistoryLike[], extensions: ExtensionLike[]) {
+  return isLoanOverdue(loan, history, extensions) || isLoanWithoutExtension(loan, history, extensions);
 }
 
 export function isItemOverdue(item: ItemLike, history: HistoryLike[], extensions: ExtensionLike[]) {
@@ -146,6 +152,10 @@ export function isItemWithoutExtension(item: ItemLike, history: HistoryLike[], e
   return getUnreturnedLoansForItem(item.uidbarang, history).some((loan) =>
     isLoanWithoutExtension(loan, history, extensions)
   );
+}
+
+export function isItemNeedsAttention(item: ItemLike, history: HistoryLike[], extensions: ExtensionLike[]) {
+  return isItemOverdue(item, history, extensions) || isItemWithoutExtension(item, history, extensions);
 }
 
 export function getItemDeadline(item: ItemLike, history: HistoryLike[], extensions: ExtensionLike[]) {
