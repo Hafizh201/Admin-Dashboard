@@ -11,6 +11,7 @@ import BarangPage from "@/pages/Barang";
 import RiwayatPage from "@/pages/Riwayat";
 import PeminjamanAktif from "@/pages/PeminjamanAktif";
 import PinjamManual from "@/pages/PinjamManual";
+import PerpanjangPage from "@/pages/Perpanjang";
 import Pengaturan from "@/pages/Pengaturan";
 import PublicMonitor from "@/pages/PublicMonitor";
 
@@ -33,6 +34,7 @@ function AdminSection() {
               <Route path="/riwayat" component={RiwayatPage} />
               <Route path="/peminjaman" component={PeminjamanAktif} />
               <Route path="/pinjam-manual" component={PinjamManual} />
+              <Route path="/perpanjang" component={PerpanjangPage} />
               <Route path="/pengaturan" component={Pengaturan} />
             </Switch>
           </Layout>
