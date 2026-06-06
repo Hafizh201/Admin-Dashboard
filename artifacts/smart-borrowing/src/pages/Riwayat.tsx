@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Riwayat } from "@/lib/api";
+import { Riwayat, isDipinjam } from "@/lib/api";
 import { useData } from "@/contexts/DataContext";
 import { useToast } from "@/components/Toast";
 import { Search, Loader2, ClipboardList, Filter, Plus, X } from "lucide-react";
@@ -41,10 +41,17 @@ function formatPerpanjang(r: Riwayat) {
   return String(value);
 }
 
+function parseDeadline(value?: string) {
+  if (!value) return null;
+  const normalized = String(value).trim().replace(" ", "T");
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 const EMPTY: Riwayat = { uidpeminjam: "", Idbarang: "", nama: "", kelas: "", mode: "Pinjam", waktu: "", Tenggat: "", extend_token: "" };
 
 export default function RiwayatPage() {
-  const { riwayat, addRiwayatItem, isLoading, pendingIds, failedIds } = useData();
+  const { riwayat, barang, addRiwayatItem, isLoading, pendingIds, failedIds } = useData();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -59,6 +66,19 @@ export default function RiwayatPage() {
   const handleSortChange = (mode: "newest_first" | "oldest_first") => {
     setSortModeState(mode);
     setSortMode(CACHE_KEYS.sortRiwayat, mode);
+  };
+
+  const isOverdueWithoutExtension = (r: Riwayat) => {
+    if (String(r.mode || "").trim().toLowerCase() !== "pinjam") return false;
+    if (formatPerpanjang(r) !== "-") return false;
+
+    const deadline = parseDeadline(r.Tenggat);
+    if (!deadline || deadline.getTime() >= Date.now()) return false;
+
+    const relatedBarang = barang.find((b) => String(b.uidbarang || "").trim() === String(r.Idbarang || "").trim());
+    if (!relatedBarang || !isDipinjam(relatedBarang.dipinjam)) return false;
+
+    return true;
   };
 
   const filtered = useMemo(() => {
@@ -89,6 +109,20 @@ export default function RiwayatPage() {
 
   return (
     <div className="page-transition space-y-5">
+      <style>{`
+        @keyframes overdueFlickerAdmin {
+          0%, 100% { background-color: rgba(254, 226, 226, 0.98); }
+          50% { background-color: rgba(248, 113, 113, 0.52); }
+        }
+        .overdue-row-admin {
+          animation: overdueFlickerAdmin 1.05s ease-in-out infinite;
+        }
+        .overdue-row-admin td {
+          color: #7f1d1d !important;
+          font-weight: 700;
+        }
+      `}</style>
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2"><ClipboardList className="w-5 h-5 text-primary" />Riwayat</h1>
@@ -152,8 +186,9 @@ export default function RiwayatPage() {
               <tbody className="divide-y divide-border">
                 {rows.map((r, i) => {
                   const localId = (r as any)._localId as string | undefined;
+                  const overdue = isOverdueWithoutExtension(r);
                   return (
-                    <tr key={i} className="hover:bg-muted/30 transition-colors">
+                    <tr key={i} className={`${overdue ? "overdue-row-admin" : "hover:bg-muted/30"} transition-colors`}>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           {r.uidpeminjam || "-"}
