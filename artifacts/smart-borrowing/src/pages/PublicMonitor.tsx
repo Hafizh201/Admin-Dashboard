@@ -80,6 +80,12 @@ function formatPerpanjang(row: RiwayatRow) {
   return String(value);
 }
 
+function parseDeadline(value?: string) {
+  if (!value) return null;
+  const date = new Date(String(value).trim().replace(" ", "T"));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function sanitizePublicData(data: { barang: BarangRow[]; riwayat: RiwayatRow[]; perpanjang?: PerpanjangRow[] }) {
   return {
     barang: data.barang ?? [],
@@ -286,6 +292,19 @@ export default function PublicMonitor() {
     return latestExtension?.tenggat_baru || latestLoan.Tenggat || "—";
   }, [riwayat, perpanjang]);
 
+  const isOverdueWithoutExtension = useCallback((r: RiwayatRow) => {
+    if (String(r.mode || "").trim().toLowerCase() !== "pinjam") return false;
+    if (formatPerpanjang(r) !== "—") return false;
+
+    const deadline = parseDeadline(r.Tenggat);
+    if (!deadline || deadline.getTime() >= Date.now()) return false;
+
+    const relatedBarang = barang.find((b) => String(b.uidbarang || "").trim() === String(r.Idbarang || "").trim());
+    if (!relatedBarang || !isDipinjam(relatedBarang.dipinjam)) return false;
+
+    return true;
+  }, [barang]);
+
   const filteredBarang = useMemo(() => {
     const sorted = barangSort === "newest" ? [...barang].reverse() : [...barang];
     return sorted.filter((b) => {
@@ -312,6 +331,20 @@ export default function PublicMonitor() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <style>{`
+        @keyframes overdueFlickerPublic {
+          0%, 100% { background-color: rgba(254, 226, 226, 0.98); }
+          50% { background-color: rgba(248, 113, 113, 0.52); }
+        }
+        .overdue-row-public {
+          animation: overdueFlickerPublic 1.05s ease-in-out infinite;
+        }
+        .overdue-row-public td {
+          color: #7f1d1d !important;
+          font-weight: 700;
+        }
+      `}</style>
+
       <header className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -372,7 +405,7 @@ export default function PublicMonitor() {
             <div className="flex items-center gap-2 flex-wrap"><Filter className="w-4 h-4 text-gray-400 flex-shrink-0" /><select value={riwayatMode} onChange={(e) => setRiwayatMode(e.target.value)} className="py-2 pl-3 pr-7 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400"><option value="">Semua Mode</option>{["Pinjam", "Kembali", "Update"].map((m) => <option key={m} value={m}>{m}</option>)}</select><div className="flex items-center gap-1.5"><input type="date" value={riwayatDate} onChange={(e) => setRiwayatDate(e.target.value)} className="py-2 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400" />{riwayatDate && <button type="button" onClick={() => setRiwayatDate("")} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>}</div><SortBtn mode={riwayatSort} onChange={setRiwayatSort} /></div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-            {filteredRiwayat.length === 0 ? <div className="flex flex-col items-center justify-center py-16 text-gray-400"><ClipboardList className="w-10 h-10 mb-3 opacity-30" /><p className="text-sm font-medium">{totalRiwayat === 0 ? "Belum ada riwayat" : "Tidak ada riwayat sesuai filter"}</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-gray-100 bg-gray-50">{["ID Barang", "Nama", "Kelas", "Mode", "Waktu", "Perpanjang"].map((h) => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>)}</tr></thead><tbody className="divide-y divide-gray-50">{filteredRiwayat.map((r, i) => <tr key={i} className="hover:bg-gray-50 transition-colors"><td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{r.Idbarang || "—"}</td><td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{r.nama || "—"}</td><td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.kelas || "—"}</td><td className="px-4 py-3"><ModeBadge mode={r.mode} /></td><td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{r.waktu || "—"}</td><td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatPerpanjang(r)}</td></tr>)}</tbody></table></div>}
+            {filteredRiwayat.length === 0 ? <div className="flex flex-col items-center justify-center py-16 text-gray-400"><ClipboardList className="w-10 h-10 mb-3 opacity-30" /><p className="text-sm font-medium">{totalRiwayat === 0 ? "Belum ada riwayat" : "Tidak ada riwayat sesuai filter"}</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-gray-100 bg-gray-50">{["ID Barang", "Nama", "Kelas", "Mode", "Waktu", "Perpanjang"].map((h) => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>)}</tr></thead><tbody className="divide-y divide-gray-50">{filteredRiwayat.map((r, i) => { const overdue = isOverdueWithoutExtension(r); return <tr key={i} className={`${overdue ? "overdue-row-public" : "hover:bg-gray-50"} transition-colors`}><td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{r.Idbarang || "—"}</td><td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{r.nama || "—"}</td><td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.kelas || "—"}</td><td className="px-4 py-3"><ModeBadge mode={r.mode} /></td><td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{r.waktu || "—"}</td><td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatPerpanjang(r)}</td></tr>; })}</tbody></table></div>}
           </div>
         </div>
 
