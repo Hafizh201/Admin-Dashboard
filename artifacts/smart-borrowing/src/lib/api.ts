@@ -1,5 +1,5 @@
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbwbffWxcfjg086vlX67I0_v1nOvw4g8dd_lOzmg_IwuBNxXHF-5Y-0fsnofom5ymuLT6g/exec";
+  "https://script.google.com/macros/s/AKfycbztbO554uoMd83DMhm531taZFZkSB5TyzOwNMBdh3CdcGI5-cm6GLSS7O8ReH5ftG2oEg/exec";
 
 export interface ApiResponse<T = unknown> {
   ok: boolean;
@@ -189,13 +189,6 @@ export function isDipinjam(value: unknown): boolean {
   return v === "true" || v === "1" || v === "ya" || v === "dipinjam" || v === "pinjam";
 }
 
-/**
- * Aturan kadaluarsa:
- * - Kosong, "None", atau "-" = tidak kadaluarsa.
- * - Jika hanya angka tahun, contoh "2026", maka berlaku sampai akhir tahun 2026.
- *   Baru dianggap kadaluarsa saat sudah masuk 2027.
- * - Jika format tanggal lengkap, contoh "2026-08-10", maka berlaku sampai akhir hari itu.
- */
 export function isKadaluarsa(value: unknown): boolean {
   if (value === null || value === undefined) return false;
 
