@@ -1,5 +1,5 @@
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbwUIf0AFmqdgAB_8qtOSb34X5f1JtcfxdOsFsz3qU2K5qQdIaT9HX3kJPvDc2IgQN7DtA/exec";
+  "https://script.google.com/macros/s/AKfycbwbffWxcfjg086vlX67I0_v1nOvw4g8dd_lOzmg_IwuBNxXHF-5Y-0fsnofom5ymuLT6g/exec";
 
 export interface ApiResponse<T = unknown> {
   ok: boolean;
@@ -63,7 +63,24 @@ export interface Riwayat {
   kelas: string;
   mode: string;
   waktu: string;
-  Perpanjang: string;
+  Tenggat?: string;
+  extend_token?: string;
+  Perpanjang?: string;
+  perpanjang_count?: number;
+  perpanjang_hari?: string;
+  perpanjang_text?: string;
+}
+
+export interface Perpanjang {
+  uidpeminjam: string;
+  nama: string;
+  kelas: string;
+  Idbarang: string;
+  extend_token: string;
+  tenggat_lama: string;
+  tenggat_baru: string;
+  waktu_perpanjang: string;
+  alasan: string;
 }
 
 export interface Stats {
@@ -89,6 +106,7 @@ export interface BootstrapData {
   siswa?: Siswa[];
   barang?: Barang[];
   riwayat?: Riwayat[];
+  perpanjang?: Perpanjang[];
   stats?: Stats;
   settings?: Record<string, unknown>;
 }
@@ -105,8 +123,9 @@ function normalizeApiResponse(payload: Record<string, unknown>, response: unknow
   const siswa = boot.siswa ?? boot.data ?? [];
   const barang = boot.barang ?? [];
   const riwayat = boot.riwayat ?? [];
+  const perpanjang = boot.perpanjang ?? [];
 
-  boot.stats = buildClientStats(siswa, barang, riwayat, boot.stats);
+  boot.stats = buildClientStats(siswa, barang, riwayat, perpanjang, boot.stats);
 
   return res;
 }
@@ -137,7 +156,7 @@ function activityLast7Days(rows: Riwayat[]): Record<string, number> {
   return result;
 }
 
-function buildClientStats(siswa: Siswa[], barang: Barang[], riwayat: Riwayat[], serverStats?: Stats): Stats {
+function buildClientStats(siswa: Siswa[], barang: Barang[], riwayat: Riwayat[], perpanjang: Perpanjang[] = [], serverStats?: Stats): Stats {
   const siswaKadaluarsa = siswa.filter((s) => isKadaluarsa(s.Kadaluarsa)).length;
   const barangDipinjam = barang.filter((b) => isDipinjam(b.dipinjam)).length;
   const today = new Date().toISOString().slice(0, 10);
@@ -154,7 +173,7 @@ function buildClientStats(siswa: Siswa[], barang: Barang[], riwayat: Riwayat[], 
     riwayat_hari_ini: riwayat.filter((r) => String(r.waktu || "").startsWith(today)).length,
     total_pinjam: riwayat.filter((r) => String(r.mode || "").toLowerCase() === "pinjam").length,
     total_kembali: riwayat.filter((r) => String(r.mode || "").toLowerCase() === "kembali").length,
-    total_perpanjang: riwayat.filter((r) => String(r.mode || "").toLowerCase() === "perpanjang").length,
+    total_perpanjang: perpanjang.length,
     kategori_barang: countBy(barang, "kategori"),
     status_barang: {
       Tersedia: barang.length - barangDipinjam,
@@ -190,7 +209,6 @@ export function isKadaluarsa(value: unknown): boolean {
 
   const now = new Date();
 
-  // Tahun saja, misalnya 2026 / 2027.
   if (/^\d{4}$/.test(raw)) {
     const year = Number(raw);
     const startOfNextYear = new Date(year + 1, 0, 1, 0, 0, 0, 0);
@@ -200,7 +218,6 @@ export function isKadaluarsa(value: unknown): boolean {
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return false;
 
-  // Berlaku sampai akhir hari pada tanggal tersebut.
   date.setHours(23, 59, 59, 999);
   return now > date;
 }
