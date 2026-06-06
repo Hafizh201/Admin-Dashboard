@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Perpanjang } from "@/lib/api";
 import { useData } from "@/contexts/DataContext";
-import { Search, Filter, RefreshCw, Loader2, Clock, CalendarDays, MessageSquare, X } from "lucide-react";
+import { useToast } from "@/components/Toast";
+import { Search, Filter, RefreshCw, Loader2, Clock, CalendarDays, MessageSquare, X, Trash2, AlertTriangle } from "lucide-react";
 import SortToggle from "@/components/SortToggle";
 import SyncButton from "@/components/SyncButton";
 import { getSortMode, setSortMode } from "@/lib/cache";
@@ -42,10 +43,13 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string |
 }
 
 export default function PerpanjangPage() {
-  const { perpanjang, barang, isLoading, refreshSilent } = useData();
+  const { perpanjang, barang, isLoading, refreshSilent, cancelPerpanjangByToken } = useData();
+  const { showToast } = useToast();
   const [search, setSearch] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [sortMode, setSortModeState] = useState<"newest_first" | "oldest_first">(() => getSortMode(SORT_KEY));
+  const [cancelTarget, setCancelTarget] = useState<Perpanjang | null>(null);
+  const [canceling, setCanceling] = useState(false);
 
   const barangMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -100,6 +104,28 @@ export default function PerpanjangPage() {
 
   const { rows, hasMore, total, shown } = useProgressiveRows(filtered);
 
+  const tokenCount = useMemo(() => {
+    const map = new Map<string, number>();
+    perpanjang.forEach((row) => {
+      const token = String(row.extend_token || "").trim();
+      if (!token) return;
+      map.set(token, (map.get(token) || 0) + 1);
+    });
+    return map;
+  }, [perpanjang]);
+
+  const handleCancel = async () => {
+    if (!cancelTarget?.extend_token) return;
+    setCanceling(true);
+    try {
+      await cancelPerpanjangByToken(cancelTarget.extend_token);
+      showToast("Perpanjangan dibatalkan dan akan disinkronkan.", "success");
+      setCancelTarget(null);
+    } finally {
+      setCanceling(false);
+    }
+  };
+
   return (
     <div className="page-transition space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -124,6 +150,11 @@ export default function PerpanjangPage() {
         <StatCard label="Total Perpanjangan" value={perpanjang.length} icon={RefreshCw} />
         <StatCard label="Perpanjang Hari Ini" value={perpanjangHariIni} icon={CalendarDays} />
         <StatCard label="Total Tambahan Hari" value={`${totalHari} Hari`} icon={Clock} />
+      </div>
+
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 flex items-center gap-2">
+        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+        <span>Cancel perpanjangan akan menghapus semua data perpanjangan dengan token yang sama.</span>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -185,6 +216,7 @@ export default function PerpanjangPage() {
                     "Tenggat Baru",
                     "Tambah",
                     "Alasan",
+                    "Aksi",
                   ].map((h) => (
                     <th key={h} className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
@@ -193,6 +225,7 @@ export default function PerpanjangPage() {
               <tbody className="divide-y divide-border">
                 {rows.map((row: Perpanjang, index) => {
                   const namaBarang = barangMap.get(normalize(row.Idbarang)) || "-";
+                  const count = tokenCount.get(String(row.extend_token || "").trim()) || 0;
                   return (
                     <tr key={`${row.extend_token}-${row.waktu_perpanjang}-${index}`} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.waktu_perpanjang || "-"}</td>
@@ -200,7 +233,12 @@ export default function PerpanjangPage() {
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{row.kelas || "-"}</td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{row.Idbarang || "-"}</td>
                       <td className="px-4 py-3 text-foreground whitespace-nowrap">{namaBarang}</td>
-                      <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground whitespace-nowrap">{row.extend_token || "-"}</td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span>{row.extend_token || "-"}</span>
+                          {count > 1 && <span className="inline-flex px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold">{count}x</span>}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.tenggat_lama || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{row.tenggat_baru || "-"}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -214,6 +252,14 @@ export default function PerpanjangPage() {
                           <span>{row.alasan || "-"}</span>
                         </div>
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <button
+                          onClick={() => setCancelTarget(row)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />Cancel
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -222,6 +268,43 @@ export default function PerpanjangPage() {
           </div>
         )}
       </div>
+
+      {cancelTarget && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-card-border rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="w-4 h-4" />
+                <h2 className="text-base font-semibold text-foreground">Cancel Perpanjangan</h2>
+              </div>
+              <button onClick={() => setCancelTarget(null)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Hapus perpanjangan dengan token berikut?
+              </p>
+              <div className="rounded-lg bg-muted/50 border border-border p-3 space-y-1 text-sm">
+                <div><span className="text-muted-foreground">Token:</span> <span className="font-mono font-semibold text-foreground">{cancelTarget.extend_token || "-"}</span></div>
+                <div><span className="text-muted-foreground">Nama:</span> <span className="font-semibold text-foreground">{cancelTarget.nama || "-"}</span></div>
+                <div><span className="text-muted-foreground">ID Barang:</span> <span className="font-mono text-foreground">{cancelTarget.Idbarang || "-"}</span></div>
+                <div><span className="text-muted-foreground">Jumlah row token ini:</span> <span className="font-semibold text-red-600">{tokenCount.get(String(cancelTarget.extend_token || "").trim()) || 1} row</span></div>
+              </div>
+              <p className="text-xs text-red-600">Data akan dihapus berdasarkan token yang sama.</p>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setCancelTarget(null)} className="flex-1 px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-muted transition-colors">Batal</button>
+                <button
+                  onClick={handleCancel}
+                  disabled={canceling}
+                  className="flex-1 px-4 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {canceling && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {canceling ? "Menghapus..." : "Ya, Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
