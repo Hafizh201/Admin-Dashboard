@@ -2,7 +2,7 @@ import { useState, ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   LayoutDashboard, Users, Package, ClipboardList, BookOpen,
-  PlusCircle, Settings, LogOut, Menu, X, Cpu, ChevronRight, WifiOff,
+  PlusCircle, Settings, LogOut, Menu, X, Cpu, ChevronRight, WifiOff, RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
@@ -15,6 +15,7 @@ const navItems = [
   { path: "/riwayat", label: "Riwayat", icon: ClipboardList },
   { path: "/peminjaman", label: "Peminjaman Aktif", icon: BookOpen },
   { path: "/pinjam-manual", label: "Pinjam Manual", icon: PlusCircle },
+  { path: "/perpanjang", label: "Pantau Perpanjang", icon: RefreshCw },
   { path: "/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
