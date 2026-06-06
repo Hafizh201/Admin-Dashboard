@@ -40,6 +40,7 @@ interface DataContextType {
   updateBarangItem: (uidbarang: string, data: Barang) => Promise<void>;
   returnBarangItem: (uidbarang: string) => Promise<void>;
   perpanjangBarangItem: (payload: PerpanjangPayload) => Promise<void>;
+  cancelPerpanjangByToken: (extendToken: string) => Promise<void>;
   addRiwayatItem: (data: Riwayat) => Promise<void>;
   pinjamBarangItem: (uidpeminjam: string, uidbarang: string, tenggat?: string) => Promise<void>;
   retryAllFailed: () => void;
@@ -117,7 +118,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (res.ok && res.data) applyBootstrapData(res.data, false);
   }, [pin, isAuthenticated, applyBootstrapData]);
 
-  // Initial load
   useEffect(() => {
     if (!isAuthenticated || !pin) return;
 
@@ -148,7 +148,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     refreshSyncState();
   }, [isAuthenticated, pin, applyBootstrapData, refreshSyncState]);
 
-  // Online/offline listeners
   useEffect(() => {
     const handleOnline = () => {
       setIsOffline(false);
@@ -163,7 +162,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
   }, [pin, refreshSilent, refreshSyncState]);
 
-  // Periodic sync
   useEffect(() => {
     if (!isAuthenticated || !pin) return;
     syncIntervalRef.current = setInterval(async () => {
@@ -184,7 +182,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setIsSyncing(false);
   }, [pin, refreshSilent, refreshSyncState]);
 
-  // --- Siswa ---
   const addSiswa = useCallback(async (data: Siswa) => {
     const localId = "s-" + Date.now();
     const item = { ...data, _localId: localId } as Siswa & { _localId: string };
@@ -204,7 +201,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     runSync();
   }, [refreshSyncState, runSync]);
 
-  // --- Barang ---
   const addBarangItem = useCallback(async (data: Barang) => {
     const localId = "b-" + Date.now();
     const item = { ...data, _localId: localId } as Barang & { _localId: string };
@@ -255,7 +251,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     runSync();
   }, [refreshSyncState, runSync]);
 
-  // --- Riwayat ---
+  const cancelPerpanjangByToken = useCallback(async (extendToken: string) => {
+    const token = String(extendToken || "").trim();
+    if (!token) return;
+
+    setPerpanjang((prev) => prev.filter((row) => String(row.extend_token || "").trim() !== token));
+    addToQueue("deletePerpanjangByToken", { extend_token: token });
+    refreshSyncState();
+    runSync();
+  }, [refreshSyncState, runSync]);
+
   const addRiwayatItem = useCallback(async (data: Riwayat) => {
     const localId = "r-" + Date.now();
     const item = { ...data, _localId: localId } as Riwayat & { _localId: string };
@@ -265,7 +270,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     runSync();
   }, [refreshSyncState, runSync]);
 
-  // --- Pinjam Manual ---
   const pinjamBarangItem = useCallback(async (uidpeminjam: string, uidbarang: string, tenggat = "") => {
     setBarang((prev) =>
       prev.map((b) =>
@@ -293,7 +297,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         pendingIds, failedIds, syncStats,
         refreshSilent,
         addSiswa, updateSiswaItem,
-        addBarangItem, updateBarangItem, returnBarangItem, perpanjangBarangItem,
+        addBarangItem, updateBarangItem, returnBarangItem, perpanjangBarangItem, cancelPerpanjangByToken,
         addRiwayatItem, pinjamBarangItem, retryAllFailed,
       }}
     >
