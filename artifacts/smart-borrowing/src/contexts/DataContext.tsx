@@ -255,11 +255,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const token = String(extendToken || "").trim();
     if (!token) return;
 
-    setPerpanjang((prev) => prev.filter((row) => String(row.extend_token || "").trim() !== token));
-    addToQueue("deletePerpanjangByToken", { extend_token: token });
-    refreshSyncState();
-    runSync();
-  }, [refreshSyncState, runSync]);
+    if (!pin) throw new Error("PIN belum tersedia. Login ulang dulu.");
+    if (!navigator.onLine) throw new Error("Tidak bisa cancel saat offline.");
+
+    setIsSyncing(true);
+    try {
+      const res = await api({ action: "deletePerpanjangByToken", pin, extend_token: token });
+      if (!res.ok) {
+        throw new Error(res.error || "Gagal cancel perpanjangan.");
+      }
+
+      setPerpanjang((prev) => prev.filter((row) => String(row.extend_token || "").trim() !== token));
+
+      // Penting: setelah perpanjangan dihapus, ambil ulang bootstrap dari server.
+      // Tanpa ini, riwayat lokal masih bisa membawa Tenggat hasil enrich lama sehingga row belum kembali tidak langsung merah.
+      await refreshSilent();
+    } finally {
+      refreshSyncState();
+      setIsSyncing(false);
+    }
+  }, [pin, refreshSilent, refreshSyncState]);
 
   const addRiwayatItem = useCallback(async (data: Riwayat) => {
     const localId = "r-" + Date.now();
