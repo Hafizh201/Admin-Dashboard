@@ -13,7 +13,7 @@ import PeminjamanAktif from "@/pages/PeminjamanAktif";
 import PinjamManual from "@/pages/PinjamManual";
 import PerpanjangPage from "@/pages/Perpanjang";
 import Pengaturan from "@/pages/Pengaturan";
-import PublicMonitor from "@/pages/PublicMonitor";
+import PublicMonitor from "@/pages/PublicMonitorV2";
 
 const queryClient = new QueryClient();
 
