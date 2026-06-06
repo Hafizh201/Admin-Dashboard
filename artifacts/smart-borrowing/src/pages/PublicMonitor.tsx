@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbwDWGybmMrZ-an8DU_1ktklelaY2dYJuJqUU96V4QGysaBusymAg3YfiFtZG9nUj34ybg/exec";
+  "https://script.google.com/macros/s/AKfycbwbffWxcfjg086vlX67I0_v1nOvw4g8dd_lOzmg_IwuBNxXHF-5Y-0fsnofom5ymuLT6g/exec";
 
 const CACHE_KEY = "sbs_public_monitor_cache";
 const REFRESH_INTERVAL = 2000;
@@ -42,12 +42,29 @@ interface RiwayatRow {
   kelas: string;
   mode: string;
   waktu: string;
-  Perpanjang: string;
+  Tenggat?: string;
+  extend_token?: string;
+  Perpanjang?: string;
+  perpanjang_text?: string;
+  perpanjang_hari?: string;
+}
+
+interface PerpanjangRow {
+  uidpeminjam: string;
+  nama: string;
+  kelas: string;
+  Idbarang: string;
+  extend_token: string;
+  tenggat_lama: string;
+  tenggat_baru: string;
+  waktu_perpanjang: string;
+  alasan: string;
 }
 
 interface CachePayload {
   barang: BarangRow[];
   riwayat: RiwayatRow[];
+  perpanjang: PerpanjangRow[];
   updatedAt: string;
 }
 
@@ -56,14 +73,22 @@ function isLoginOnlyRow(row: RiwayatRow) {
   return mode === "login only" || mode === "loginonly" || mode.includes("login only");
 }
 
-function sanitizePublicData(data: { barang: BarangRow[]; riwayat: RiwayatRow[] }) {
+function formatPerpanjang(row: RiwayatRow) {
+  const value = row.perpanjang_text || row.Perpanjang || row.perpanjang_hari || "";
+  if (!value) return "—";
+  if (/^\d+$/.test(String(value))) return `${value} Hari`;
+  return String(value);
+}
+
+function sanitizePublicData(data: { barang: BarangRow[]; riwayat: RiwayatRow[]; perpanjang?: PerpanjangRow[] }) {
   return {
     barang: data.barang ?? [],
     riwayat: (data.riwayat ?? []).filter((row) => !isLoginOnlyRow(row)),
+    perpanjang: data.perpanjang ?? [],
   };
 }
 
-async function fetchPublicMonitor(): Promise<{ barang: BarangRow[]; riwayat: RiwayatRow[] }> {
+async function fetchPublicMonitor(): Promise<{ barang: BarangRow[]; riwayat: RiwayatRow[]; perpanjang: PerpanjangRow[] }> {
   const res = await fetch(API_URL, {
     method: "POST",
     body: JSON.stringify({ action: "publicMonitor" }),
@@ -77,6 +102,7 @@ async function fetchPublicMonitor(): Promise<{ barang: BarangRow[]; riwayat: Riw
   return sanitizePublicData({
     barang: json.data?.barang ?? [],
     riwayat: json.data?.riwayat ?? [],
+    perpanjang: json.data?.perpanjang ?? [],
   });
 }
 
@@ -96,7 +122,7 @@ function writeCache(payload: CachePayload) {
   } catch {}
 }
 
-function fingerprint(data: { barang: BarangRow[]; riwayat: RiwayatRow[] }) {
+function fingerprint(data: { barang: BarangRow[]; riwayat: RiwayatRow[]; perpanjang?: PerpanjangRow[] }) {
   return JSON.stringify(data);
 }
 
@@ -153,6 +179,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: n
 export default function PublicMonitor() {
   const [barang, setBarang] = useState<BarangRow[]>([]);
   const [riwayat, setRiwayat] = useState<RiwayatRow[]>([]);
+  const [perpanjang, setPerpanjang] = useState<PerpanjangRow[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -188,13 +215,14 @@ export default function PublicMonitor() {
     toastTimerRef.current = setTimeout(() => setNewDataToast(false), 4000);
   }, []);
 
-  const applyData = useCallback((data: { barang: BarangRow[]; riwayat: RiwayatRow[] }, silent = false) => {
+  const applyData = useCallback((data: { barang: BarangRow[]; riwayat: RiwayatRow[]; perpanjang?: PerpanjangRow[] }, silent = false) => {
     const safeData = sanitizePublicData(data);
     const fp = fingerprint(safeData);
     if (fp !== lastFingerprintRef.current) {
       lastFingerprintRef.current = fp;
       setBarang(safeData.barang);
       setRiwayat(safeData.riwayat);
+      setPerpanjang(safeData.perpanjang);
       if (silent) showNewDataToast();
     }
   }, [showNewDataToast]);
@@ -251,8 +279,9 @@ export default function PublicMonitor() {
     const sorted = riwayatSort === "newest" ? [...riwayat].reverse() : [...riwayat];
     return sorted.filter((r) => {
       if (isLoginOnlyRow(r)) return false;
-      const matchSearch = !riwayatSearch || [r.Idbarang, r.nama, r.kelas, r.mode, r.waktu, r.Perpanjang].some((v) => String(v || "").toLowerCase().includes(riwayatSearch.toLowerCase()));
-      const matchMode = !riwayatMode || r.mode === riwayatMode;
+      const perpanjangText = formatPerpanjang(r);
+      const matchSearch = !riwayatSearch || [r.Idbarang, r.nama, r.kelas, r.mode, r.waktu, r.Tenggat, r.extend_token, perpanjangText].some((v) => String(v || "").toLowerCase().includes(riwayatSearch.toLowerCase()));
+      const matchMode = !riwayatMode || String(r.mode || "").toLowerCase() === riwayatMode.toLowerCase();
       const matchDate = !riwayatDate || String(r.waktu || "").startsWith(riwayatDate);
       return matchSearch && matchMode && matchDate;
     });
@@ -318,11 +347,11 @@ export default function PublicMonitor() {
         <div>
           <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2"><ClipboardList className="w-4 h-4 text-blue-600" />Riwayat Peminjaman<span className="text-xs font-normal text-gray-400 ml-1">({filteredRiwayat.length} dari {totalRiwayat})</span></h2>
           <div className="flex flex-col sm:flex-row gap-2 mb-3">
-            <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="search" placeholder="Cari ID barang, nama, kelas, mode, waktu..." value={riwayatSearch} onChange={(e) => setRiwayatSearch(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" /></div>
-            <div className="flex items-center gap-2 flex-wrap"><Filter className="w-4 h-4 text-gray-400 flex-shrink-0" /><select value={riwayatMode} onChange={(e) => setRiwayatMode(e.target.value)} className="py-2 pl-3 pr-7 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400"><option value="">Semua Mode</option>{["Pinjam", "Kembali", "Perpanjang", "Update"].map((m) => <option key={m} value={m}>{m}</option>)}</select><div className="flex items-center gap-1.5"><input type="date" value={riwayatDate} onChange={(e) => setRiwayatDate(e.target.value)} className="py-2 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400" />{riwayatDate && <button type="button" onClick={() => setRiwayatDate("")} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>}</div><SortBtn mode={riwayatSort} onChange={setRiwayatSort} /></div>
+            <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="search" placeholder="Cari ID barang, nama, kelas, mode, waktu, token..." value={riwayatSearch} onChange={(e) => setRiwayatSearch(e.target.value)} className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" /></div>
+            <div className="flex items-center gap-2 flex-wrap"><Filter className="w-4 h-4 text-gray-400 flex-shrink-0" /><select value={riwayatMode} onChange={(e) => setRiwayatMode(e.target.value)} className="py-2 pl-3 pr-7 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400"><option value="">Semua Mode</option>{["Pinjam", "Kembali", "Update"].map((m) => <option key={m} value={m}>{m}</option>)}</select><div className="flex items-center gap-1.5"><input type="date" value={riwayatDate} onChange={(e) => setRiwayatDate(e.target.value)} className="py-2 px-3 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400" />{riwayatDate && <button type="button" onClick={() => setRiwayatDate("")} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>}</div><SortBtn mode={riwayatSort} onChange={setRiwayatSort} /></div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-            {filteredRiwayat.length === 0 ? <div className="flex flex-col items-center justify-center py-16 text-gray-400"><ClipboardList className="w-10 h-10 mb-3 opacity-30" /><p className="text-sm font-medium">{totalRiwayat === 0 ? "Belum ada riwayat" : "Tidak ada riwayat sesuai filter"}</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-gray-100 bg-gray-50">{["ID Barang", "Nama", "Kelas", "Mode", "Waktu", "Perpanjang"].map((h) => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>)}</tr></thead><tbody className="divide-y divide-gray-50">{filteredRiwayat.map((r, i) => <tr key={i} className="hover:bg-gray-50 transition-colors"><td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{r.Idbarang || "—"}</td><td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{r.nama || "—"}</td><td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.kelas || "—"}</td><td className="px-4 py-3"><ModeBadge mode={r.mode} /></td><td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{r.waktu || "—"}</td><td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{r.Perpanjang || "—"}</td></tr>)}</tbody></table></div>}
+            {filteredRiwayat.length === 0 ? <div className="flex flex-col items-center justify-center py-16 text-gray-400"><ClipboardList className="w-10 h-10 mb-3 opacity-30" /><p className="text-sm font-medium">{totalRiwayat === 0 ? "Belum ada riwayat" : "Tidak ada riwayat sesuai filter"}</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-gray-100 bg-gray-50">{["ID Barang", "Nama", "Kelas", "Mode", "Waktu", "Perpanjang"].map((h) => <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>)}</tr></thead><tbody className="divide-y divide-gray-50">{filteredRiwayat.map((r, i) => <tr key={i} className="hover:bg-gray-50 transition-colors"><td className="px-4 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{r.Idbarang || "—"}</td><td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{r.nama || "—"}</td><td className="px-4 py-3 text-gray-600 whitespace-nowrap">{r.kelas || "—"}</td><td className="px-4 py-3"><ModeBadge mode={r.mode} /></td><td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{r.waktu || "—"}</td><td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatPerpanjang(r)}</td></tr>)}</tbody></table></div>}
           </div>
         </div>
 
