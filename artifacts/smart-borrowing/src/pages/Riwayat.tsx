@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
-import { Riwayat, isDipinjam } from "@/lib/api";
+import { Riwayat } from "@/lib/api";
 import { useData } from "@/contexts/DataContext";
 import { useToast } from "@/components/Toast";
-import { Search, Loader2, ClipboardList, Filter, Plus, X } from "lucide-react";
+import { Search, Loader2, ClipboardList, Filter, Plus, X, AlertTriangle } from "lucide-react";
 import { useProgressiveRows } from "@/hooks/useProgressiveRows";
 import SortToggle from "@/components/SortToggle";
 import { getSortMode, setSortMode, CACHE_KEYS } from "@/lib/cache";
@@ -41,17 +41,36 @@ function formatPerpanjang(r: Riwayat) {
   return String(value);
 }
 
+function normalize(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function parseDeadline(value?: string) {
   if (!value) return null;
-  const normalized = String(value).trim().replace(" ", "T");
-  const date = new Date(normalized);
+  const date = new Date(String(value).trim().replace(" ", "T"));
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isPinjam(row: Riwayat) {
+  return normalize(row.mode) === "pinjam";
+}
+
+function isKembali(row: Riwayat) {
+  return normalize(row.mode) === "kembali";
+}
+
+function sameUserAndLoanCode(a: Riwayat, b: Riwayat) {
+  const userA = normalize(a.uidpeminjam);
+  const userB = normalize(b.uidpeminjam);
+  const codeA = normalize(a.extend_token);
+  const codeB = normalize(b.extend_token);
+  return Boolean(userA && codeA && userA === userB && codeA === codeB);
 }
 
 const EMPTY: Riwayat = { uidpeminjam: "", Idbarang: "", nama: "", kelas: "", mode: "Pinjam", waktu: "", Tenggat: "", extend_token: "" };
 
 export default function RiwayatPage() {
-  const { riwayat, barang, addRiwayatItem, isLoading, pendingIds, failedIds } = useData();
+  const { riwayat, perpanjang, addRiwayatItem, isLoading, pendingIds, failedIds } = useData();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -68,29 +87,35 @@ export default function RiwayatPage() {
     setSortMode(CACHE_KEYS.sortRiwayat, mode);
   };
 
-  const isOverdueWithoutExtension = (r: Riwayat) => {
-    if (String(r.mode || "").trim().toLowerCase() !== "pinjam") return false;
-    if (formatPerpanjang(r) !== "-") return false;
+  const hasMatchingReturn = (loan: Riwayat) => riwayat.some((row) => isKembali(row) && sameUserAndLoanCode(loan, row));
 
-    const deadline = parseDeadline(r.Tenggat);
-    if (!deadline || deadline.getTime() >= Date.now()) return false;
+  const getEffectiveDeadline = (loan: Riwayat) => {
+    const user = normalize(loan.uidpeminjam);
+    const code = normalize(loan.extend_token);
+    const related = user && code
+      ? perpanjang.filter((p) => normalize(p.uidpeminjam) === user && normalize(p.extend_token) === code)
+      : [];
+    const latestExtension = related[related.length - 1];
+    return latestExtension?.tenggat_baru || loan.Tenggat || "";
+  };
 
-    const relatedBarang = barang.find((b) => String(b.uidbarang || "").trim() === String(r.Idbarang || "").trim());
-    if (!relatedBarang || !isDipinjam(relatedBarang.dipinjam)) return false;
-
-    return true;
+  const isBelumKembali = (r: Riwayat) => {
+    if (!isPinjam(r)) return false;
+    if (hasMatchingReturn(r)) return false;
+    const deadline = parseDeadline(getEffectiveDeadline(r));
+    return Boolean(deadline && deadline.getTime() < Date.now());
   };
 
   const filtered = useMemo(() => {
     const sorted = sortMode === "newest_first" ? [...riwayat].reverse() : [...riwayat];
     return sorted.filter(r => {
-      const matchSearch = !search || [r.uidpeminjam, r.Idbarang, r.nama, r.kelas, r.mode, r.waktu, r.Tenggat, r.extend_token, formatPerpanjang(r)]
+      const matchSearch = !search || [r.uidpeminjam, r.Idbarang, r.nama, r.kelas, r.mode, r.waktu, getEffectiveDeadline(r), r.extend_token, formatPerpanjang(r)]
         .some(v => String(v || "").toLowerCase().includes(search.toLowerCase()));
       const matchMode = !filterMode || String(r.mode || "").toLowerCase() === filterMode.toLowerCase();
       const matchDate = !filterDate || r.waktu?.startsWith(filterDate);
       return matchSearch && matchMode && matchDate;
     });
-  }, [riwayat, search, filterMode, filterDate, sortMode]);
+  }, [riwayat, search, filterMode, filterDate, sortMode, perpanjang]);
 
   const { rows, hasMore, total, shown } = useProgressiveRows(filtered);
 
@@ -110,14 +135,14 @@ export default function RiwayatPage() {
   return (
     <div className="page-transition space-y-5">
       <style>{`
-        @keyframes overdueFlickerAdmin {
+        @keyframes belumKembaliFlickerAdmin {
           0%, 100% { background-color: rgba(254, 226, 226, 0.98); }
           50% { background-color: rgba(248, 113, 113, 0.52); }
         }
-        .overdue-row-admin {
-          animation: overdueFlickerAdmin 1.05s ease-in-out infinite;
+        .belum-kembali-row-admin {
+          animation: belumKembaliFlickerAdmin 1.05s ease-in-out infinite;
         }
-        .overdue-row-admin td {
+        .belum-kembali-row-admin td {
           color: #7f1d1d !important;
           font-weight: 700;
         }
@@ -131,6 +156,11 @@ export default function RiwayatPage() {
         <button onClick={() => { setForm(EMPTY); setShowModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
           <Plus className="w-4 h-4" />Tambah Riwayat
         </button>
+      </div>
+
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+        <span>Baris yang berkedip merah berarti <strong>belum kembali</strong>: data PINJAM sudah melewati tenggat dan belum ada mode KEMBALI dengan UID peminjam + token yang sama.</span>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -186,9 +216,9 @@ export default function RiwayatPage() {
               <tbody className="divide-y divide-border">
                 {rows.map((r, i) => {
                   const localId = (r as any)._localId as string | undefined;
-                  const overdue = isOverdueWithoutExtension(r);
+                  const belumKembali = isBelumKembali(r);
                   return (
-                    <tr key={i} className={`${overdue ? "overdue-row-admin" : "hover:bg-muted/30"} transition-colors`}>
+                    <tr key={i} className={`${belumKembali ? "belum-kembali-row-admin" : "hover:bg-muted/30"} transition-colors`}>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           {r.uidpeminjam || "-"}
@@ -200,7 +230,7 @@ export default function RiwayatPage() {
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{r.kelas || "-"}</td>
                       <td className="px-4 py-3"><ModeBadge mode={r.mode} /></td>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.waktu || "-"}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.Tenggat || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{getEffectiveDeadline(r) || "-"}</td>
                       <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground whitespace-nowrap">{r.extend_token || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatPerpanjang(r)}</td>
                     </tr>
