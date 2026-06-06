@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Barang, isDipinjam } from "@/lib/api";
 import { useData } from "@/contexts/DataContext";
 import { useToast } from "@/components/Toast";
@@ -30,7 +30,7 @@ function SyncBadge({ localId, pendingIds, failedIds }: { localId?: string; pendi
 }
 
 export default function BarangPage() {
-  const { barang, addBarangItem, updateBarangItem, isLoading, pendingIds, failedIds } = useData();
+  const { barang, riwayat, perpanjang, addBarangItem, updateBarangItem, isLoading, pendingIds, failedIds } = useData();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -50,16 +50,36 @@ export default function BarangPage() {
 
   const kategoriList = useMemo(() => [...new Set(barang.map(b => b.kategori).filter(Boolean))], [barang]);
 
+  const getMaxKembali = useCallback((b: Barang) => {
+    if (!isDipinjam(b.dipinjam)) return "-";
+
+    const latestLoan = [...riwayat].reverse().find((r) =>
+      String(r.Idbarang || "").trim() === String(b.uidbarang || "").trim() &&
+      String(r.mode || "").trim().toLowerCase() === "pinjam"
+    );
+
+    if (!latestLoan) return "-";
+
+    const token = String(latestLoan.extend_token || "").trim();
+    const relatedExtensions = token
+      ? perpanjang.filter((p) => String(p.extend_token || "").trim() === token)
+      : [];
+    const latestExtension = relatedExtensions[relatedExtensions.length - 1];
+
+    return latestExtension?.tenggat_baru || latestLoan.Tenggat || "-";
+  }, [riwayat, perpanjang]);
+
   const filtered = useMemo(() => {
     const sorted = sortMode === "newest_first" ? [...barang].reverse() : [...barang];
     return sorted.filter(b => {
-      const matchSearch = !search || [b.uidbarang, b.namabarang, b.kategori, b.lastuser, b.lastkelas, b.lastuid]
+      const maxKembali = getMaxKembali(b);
+      const matchSearch = !search || [b.uidbarang, b.namabarang, b.kategori, b.lastuser, b.lastkelas, b.lastuid, maxKembali]
         .some(v => v?.toLowerCase().includes(search.toLowerCase()));
       const matchKategori = !filterKategori || b.kategori === filterKategori;
       const matchStatus = !filterStatus || (filterStatus === "dipinjam" ? isDipinjam(b.dipinjam) : !isDipinjam(b.dipinjam));
       return matchSearch && matchKategori && matchStatus;
     });
-  }, [barang, search, filterKategori, filterStatus, sortMode]);
+  }, [barang, search, filterKategori, filterStatus, sortMode, getMaxKembali]);
 
   const { rows, hasMore, total, shown } = useProgressiveRows(filtered);
 
@@ -107,7 +127,7 @@ export default function BarangPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
-            type="search" placeholder="Cari UID, nama, kategori, last user..."
+            type="search" placeholder="Cari UID, nama, kategori, last user, max kembali..."
             value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
@@ -147,7 +167,7 @@ export default function BarangPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {["UID Barang","Nama Barang","Kategori","Status","Last User","Last Kelas","Last Update","Last UID","Aksi"].map(h => (
+                  {["UID Barang","Nama Barang","Kategori","Status","Last User","Last Kelas","Max Kembali","Last UID","Aksi"].map(h => (
                     <th key={h} className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -168,7 +188,7 @@ export default function BarangPage() {
                       <td className="px-4 py-3"><StatusBadge value={b.dipinjam} /></td>
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{b.lastuser || "-"}</td>
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{b.lastkelas || "-"}</td>
-                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{b.lastupdate || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{getMaxKembali(b)}</td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{b.lastuid || "-"}</td>
                       <td className="px-4 py-3">
                         <button onClick={() => openEdit(b)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors whitespace-nowrap">
