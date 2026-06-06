@@ -7,18 +7,18 @@ import { useProgressiveRows } from "@/hooks/useProgressiveRows";
 import SortToggle from "@/components/SortToggle";
 import { getSortMode, setSortMode, CACHE_KEYS } from "@/lib/cache";
 
-const MODES = ["Pinjam", "Kembali", "Perpanjang", "Update"];
+const MODES = ["Pinjam", "Kembali", "Update"];
 
 function ModeBadge({ mode }: { mode: string }) {
+  const normalized = String(mode || "").trim().toLowerCase();
   const colors: Record<string, string> = {
-    Pinjam: "bg-blue-100 text-blue-700",
-    Kembali: "bg-green-100 text-green-700",
-    Perpanjang: "bg-yellow-100 text-yellow-700",
-    Update: "bg-gray-100 text-gray-600",
+    pinjam: "bg-red-100 text-red-700",
+    kembali: "bg-green-100 text-green-700",
+    update: "bg-gray-100 text-gray-600",
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${colors[mode] || "bg-gray-100 text-gray-600"}`}>
-      {mode}
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${colors[normalized] || "bg-gray-100 text-gray-600"}`}>
+      {mode || "-"}
     </span>
   );
 }
@@ -34,7 +34,14 @@ function SyncBadge({ localId, pendingIds, failedIds }: { localId?: string; pendi
   return null;
 }
 
-const EMPTY: Riwayat = { uidpeminjam: "", Idbarang: "", nama: "", kelas: "", mode: "Pinjam", waktu: "", Perpanjang: "" };
+function formatPerpanjang(r: Riwayat) {
+  const value = r.perpanjang_text || r.Perpanjang || r.perpanjang_hari || "";
+  if (!value) return "-";
+  if (/^\d+$/.test(String(value))) return `${value} Hari`;
+  return String(value);
+}
+
+const EMPTY: Riwayat = { uidpeminjam: "", Idbarang: "", nama: "", kelas: "", mode: "Pinjam", waktu: "", Tenggat: "", extend_token: "" };
 
 export default function RiwayatPage() {
   const { riwayat, addRiwayatItem, isLoading, pendingIds, failedIds } = useData();
@@ -57,9 +64,9 @@ export default function RiwayatPage() {
   const filtered = useMemo(() => {
     const sorted = sortMode === "newest_first" ? [...riwayat].reverse() : [...riwayat];
     return sorted.filter(r => {
-      const matchSearch = !search || [r.uidpeminjam, r.Idbarang, r.nama, r.kelas, r.mode, r.waktu, r.Perpanjang]
-        .some(v => v?.toLowerCase().includes(search.toLowerCase()));
-      const matchMode = !filterMode || r.mode === filterMode;
+      const matchSearch = !search || [r.uidpeminjam, r.Idbarang, r.nama, r.kelas, r.mode, r.waktu, r.Tenggat, r.extend_token, formatPerpanjang(r)]
+        .some(v => String(v || "").toLowerCase().includes(search.toLowerCase()));
+      const matchMode = !filterMode || String(r.mode || "").toLowerCase() === filterMode.toLowerCase();
       const matchDate = !filterDate || r.waktu?.startsWith(filterDate);
       return matchSearch && matchMode && matchDate;
     });
@@ -96,7 +103,7 @@ export default function RiwayatPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
-            type="search" placeholder="Cari nama, UID peminjam, ID barang..."
+            type="search" placeholder="Cari nama, UID peminjam, ID barang, token..."
             value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
           />
@@ -137,7 +144,7 @@ export default function RiwayatPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {["UID Peminjam","ID Barang","Nama","Kelas","Mode","Waktu","Perpanjang"].map(h => (
+                  {["UID Peminjam", "ID Barang", "Nama", "Kelas", "Mode", "Waktu", "Tenggat", "Token", "Perpanjang"].map(h => (
                     <th key={h} className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -158,7 +165,9 @@ export default function RiwayatPage() {
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{r.kelas || "-"}</td>
                       <td className="px-4 py-3"><ModeBadge mode={r.mode} /></td>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.waktu || "-"}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.Perpanjang || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{r.Tenggat || "-"}</td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground whitespace-nowrap">{r.extend_token || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatPerpanjang(r)}</td>
                     </tr>
                   );
                 })}
@@ -182,11 +191,12 @@ export default function RiwayatPage() {
                 { field: "nama", label: "Nama" },
                 { field: "kelas", label: "Kelas" },
                 { field: "waktu", label: "Waktu (YYYY-MM-DD HH:mm:ss)" },
-                { field: "Perpanjang", label: "Perpanjang" },
+                { field: "Tenggat", label: "Tenggat (YYYY-MM-DD HH:mm:ss)" },
+                { field: "extend_token", label: "Token Peminjaman" },
               ] as { field: keyof Riwayat; label: string }[]).map(({ field, label }) => (
                 <div key={field}>
                   <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
-                  <input type="text" value={form[field]}
+                  <input type="text" value={String(form[field] || "")}
                     onChange={e => setForm({ ...form, [field]: e.target.value })}
                     required={field === "uidpeminjam" || field === "Idbarang" || field === "nama"}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
