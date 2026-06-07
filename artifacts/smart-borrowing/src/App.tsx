@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Router } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
@@ -36,6 +37,7 @@ function AdminSection() {
               <Route path="/pinjam-manual" component={PinjamManual} />
               <Route path="/perpanjang" component={PerpanjangPage} />
               <Route path="/pengaturan" component={Pengaturan} />
+              <Route component={Dashboard} />
             </Switch>
           </Layout>
         </DataProvider>
@@ -44,10 +46,22 @@ function AdminSection() {
   );
 }
 
-function AppRoutes() {
-  const [location] = useLocation();
+function normalizePath(path: string) {
+  if (path === "/") return path;
+  return path.replace(/\/+$/, "") || "/";
+}
 
-  if (location.startsWith("/admin")) {
+function AppRoutes() {
+  const [location, setLocation] = useLocation();
+  const normalizedLocation = normalizePath(location);
+
+  useEffect(() => {
+    if (location !== normalizedLocation) {
+      setLocation(normalizedLocation, { replace: true });
+    }
+  }, [location, normalizedLocation, setLocation]);
+
+  if (normalizedLocation === "/admin" || normalizedLocation.startsWith("/admin/")) {
     return <AdminSection />;
   }
 
