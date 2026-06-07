@@ -7,7 +7,8 @@
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "vercel-build": "cd ../.. && pnpm --filter @workspace/smart-borrowing build && rm -rf artifacts/api-server/public && mkdir -p artifacts/api-server/public && cp -R artifacts/smart-borrowing/dist/public/. artifacts/api-server/public/"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
