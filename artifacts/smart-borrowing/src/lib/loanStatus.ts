@@ -22,6 +22,25 @@ export function normalizeLoanKey(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
+function buildSafeDate(year: number, month: number, day: number, hour = 0, minute = 0, second = 0) {
+  const date = new Date(year, month - 1, day, hour, minute, second);
+  if (Number.isNaN(date.getTime())) return null;
+
+  // Guard supaya tanggal invalid seperti 31/02/2026 tidak otomatis digeser JS ke bulan berikutnya.
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hour ||
+    date.getMinutes() !== minute ||
+    date.getSeconds() !== second
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
 export function parseLoanDate(value?: string) {
   if (!value) return null;
 
@@ -31,15 +50,32 @@ export function parseLoanDate(value?: string) {
   const isoLike = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
   if (isoLike) {
     const [, y, m, d, hh = "0", mm = "0", ss = "0"] = isoLike;
-    const date = new Date(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), Number(ss));
-    return Number.isNaN(date.getTime()) ? null : date;
+    return buildSafeDate(Number(y), Number(m), Number(d), Number(hh), Number(mm), Number(ss));
   }
 
   const slashLike = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
   if (slashLike) {
-    const [, d, m, y, hh = "0", mm = "0", ss = "0"] = slashLike;
-    const date = new Date(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), Number(ss));
-    return Number.isNaN(date.getTime()) ? null : date;
+    const [, first, second, year, hh = "0", mm = "0", ss = "0"] = slashLike;
+    const a = Number(first);
+    const b = Number(second);
+    const y = Number(year);
+    const hour = Number(hh);
+    const minute = Number(mm);
+    const secondValue = Number(ss);
+
+    // Google Sheets/App Script sering mengirim FORMATTED_VALUE seperti M/D/YYYY.
+    // Contoh: 6/7/2026 berarti 7 Juni 2026, bukan 6 Juli 2026.
+    // Namun kalau angka pertama > 12, formatnya pasti D/M/YYYY, jadi tetap didukung.
+    if (a > 12 && b <= 12) {
+      return buildSafeDate(y, b, a, hour, minute, secondValue);
+    }
+
+    if (b > 12 && a <= 12) {
+      return buildSafeDate(y, a, b, hour, minute, secondValue);
+    }
+
+    // Untuk kasus ambigu seperti 6/7/2026, prioritaskan M/D/YYYY sesuai output Google Sheets.
+    return buildSafeDate(y, a, b, hour, minute, secondValue);
   }
 
   const fallback = new Date(raw);
