@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": "pnpm --filter @workspace/smart-borrowing build && rm -rf public && mkdir -p public && cp -R artifacts/smart-borrowing/dist/public/. public/",
+  "buildCommand": "pnpm --filter @workspace/smart-borrowing build && rm -rf public && mkdir -p public && if [ -d artifacts/smart-borrowing/dist/public ]; then cp -R artifacts/smart-borrowing/dist/public/. public/; elif [ -d dist/public ]; then cp -R dist/public/. public/; else echo 'Build output not found'; find . -maxdepth 5 -type d -name public -print; exit 1; fi",
   "outputDirectory": "public"
 }
