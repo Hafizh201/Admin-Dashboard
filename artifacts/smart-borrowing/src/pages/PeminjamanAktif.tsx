@@ -5,29 +5,26 @@ import { useToast } from "@/components/Toast";
 import { BookOpen, Loader2, RotateCcw, RefreshCw, AlertTriangle, X } from "lucide-react";
 import SortToggle from "@/components/SortToggle";
 import { getSortMode, setSortMode, CACHE_KEYS } from "@/lib/cache";
+import { getEffectiveDeadline, parseLoanDate } from "@/lib/loanStatus";
 
 type ConfirmAction = { type: "kembalikan" | "perpanjang"; uidbarang: string; namabarang: string } | null;
-
-function parseDate(value?: string) {
-  if (!value) return null;
-  const date = new Date(value.replace(" ", "T"));
-  return Number.isNaN(date.getTime()) ? null : date;
-}
 
 function formatDateTime(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-function addDays(value: string, days: string) {
-  const base = parseDate(value) || new Date();
+function addDaysFromDeadline(value: string, days: string) {
+  const base = parseLoanDate(value);
+  if (!base) return "";
+
   const d = new Date(base);
   d.setDate(d.getDate() + Number(days || 0));
   return formatDateTime(d);
 }
 
 export default function PeminjamanAktif() {
-  const { barang, riwayat, returnBarangItem, perpanjangBarangItem, isLoading, refreshSilent } = useData();
+  const { barang, riwayat, perpanjang, returnBarangItem, perpanjangBarangItem, isLoading, refreshSilent } = useData();
   const { showToast } = useToast();
   const [confirm, setConfirm] = useState<ConfirmAction>(null);
   const [hariTambah, setHariTambah] = useState("1");
@@ -52,10 +49,15 @@ export default function PeminjamanAktif() {
     String(r.mode || "").trim().toLowerCase() === "pinjam"
   );
 
+  const getCurrentDeadline = (loan: ReturnType<typeof getLatestLoan> | undefined, fallback = "") => {
+    const current = getEffectiveDeadline(loan, perpanjang);
+    return current || fallback || "";
+  };
+
   const selectedBarang = confirm ? barang.find((b) => b.uidbarang === confirm.uidbarang) : undefined;
   const selectedLoan = confirm ? getLatestLoan(confirm.uidbarang) : undefined;
-  const tenggatLama = selectedLoan?.Tenggat || selectedBarang?.lastupdate || "";
-  const tenggatBaru = confirm?.type === "perpanjang" ? addDays(tenggatLama, hariTambah) : "";
+  const tenggatLama = getCurrentDeadline(selectedLoan, selectedBarang?.lastupdate || "");
+  const tenggatBaru = confirm?.type === "perpanjang" ? addDaysFromDeadline(tenggatLama, hariTambah) : "";
   const waktuPerpanjang = formatDateTime(new Date());
 
   const handleConfirm = async () => {
@@ -71,6 +73,13 @@ export default function PeminjamanAktif() {
           setActing(false);
           return;
         }
+
+        if (!parseLoanDate(tenggatLama) || !tenggatBaru) {
+          showToast("Tenggat lama tidak valid. Sync ulang data dulu sebelum perpanjang.", "error");
+          setActing(false);
+          return;
+        }
+
         await perpanjangBarangItem({
           uidbarang: confirm.uidbarang,
           hari: hariTambah,
@@ -79,7 +88,7 @@ export default function PeminjamanAktif() {
           tenggat_lama: tenggatLama,
           tenggat_baru: tenggatBaru,
         });
-        showToast(`${confirm.namabarang} berhasil diperpanjang.`, "success");
+        showToast(`${confirm.namabarang} berhasil diperpanjang dari tenggat lama.`, "success");
       }
       setConfirm(null);
       setHariTambah("1");
@@ -119,6 +128,7 @@ export default function PeminjamanAktif() {
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {activeLoans.map((b, i) => {
             const loan = getLatestLoan(b.uidbarang);
+            const currentDeadline = getCurrentDeadline(loan, b.lastupdate || "");
             return (
               <div key={b.uidbarang || i} className="bg-card border border-card-border rounded-xl p-5 shadow-xs hover:shadow-sm transition-shadow space-y-3">
                 <div className="flex items-start justify-between gap-2">
@@ -135,7 +145,7 @@ export default function PeminjamanAktif() {
                     ["Last User", b.lastuser, false],
                     ["Kelas", b.lastkelas, false],
                     ["Kode", loan?.extend_token || "", true],
-                    ["Tenggat", loan?.Tenggat || "", false],
+                    ["Tenggat", currentDeadline || "", false],
                     ["Last Update", b.lastupdate, false],
                   ].map(([label, val, mono]) => (
                     <div key={label as string} className="flex gap-2">
@@ -191,6 +201,7 @@ export default function PeminjamanAktif() {
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1.5">Tambah Hari</label>
                     <input type="number" min="1" value={hariTambah} onChange={e => setHariTambah(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
+                    <p className="mt-1 text-[11px] text-muted-foreground">Hari tambahan dihitung dari Tenggat Lama, bukan dari waktu pengisian form.</p>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1.5">Alasan <span className="font-normal">(opsional)</span></label>
