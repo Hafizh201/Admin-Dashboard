@@ -3,5 +3,5 @@
   "framework": "vite",
   "installCommand": "pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm --filter @workspace/smart-borrowing build",
-  "outputDirectory": "artifacts/smart-borrowing/dist"
+  "outputDirectory": "artifacts/smart-borrowing/dist/public"
 }
