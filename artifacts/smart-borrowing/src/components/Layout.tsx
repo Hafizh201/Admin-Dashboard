@@ -7,6 +7,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
 import SyncIndicator from "./SyncIndicator";
+import { AdminPageSkeleton } from "./PageSkeleton";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -41,7 +42,7 @@ function NavButton({ item, active, onClick }: { item: (typeof navItems)[0]; acti
 export default function Layout({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
   const { logout } = useAuth();
-  const { isOffline } = useData();
+  const { isOffline, isLoading } = useData();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const SidebarContent = ({ onClose }: { onClose?: () => void }) => (
@@ -128,7 +129,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         )}
 
         <main className="flex-1 overflow-y-auto">
-          <div className="p-4 md:p-6">{children}</div>
+          <div className="p-4 md:p-6">{isLoading ? <AdminPageSkeleton /> : children}</div>
         </main>
       </div>
     </div>
