@@ -1,14 +1,18 @@
 import { useData } from "@/contexts/DataContext";
 import { isDipinjam, isSiswaAktif } from "@/lib/api";
 import {
-  Users, Package, BookOpen, Activity, TrendingUp, RefreshCw, Loader2,
+  Users, Package, BookOpen, Activity, TrendingUp, RefreshCw,
   UserCheck, UserX, CheckCircle, Clock, BarChart2, ArrowUpRight, RotateCcw, Info,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 
 const COLORS = ["#1d4ed8", "#16a34a", "#ca8a04", "#9333ea", "#dc2626", "#0891b2", "#ea580c"];
+const STATUS_COLORS: Record<string, string> = {
+  Tersedia: "#16a34a",
+  Dipinjam: "#1d4ed8",
+};
 
 function StatCard({ label, value, icon: Icon, color }: {
   label: string; value: number | string; icon: React.ElementType; color: string;
@@ -28,25 +32,51 @@ function StatCard({ label, value, icon: Icon, color }: {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+    <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
       <BarChart2 className="w-4 h-4 text-primary" />{children}
     </h2>
   );
 }
 
-export default function Dashboard() {
-  const { siswa, barang, riwayat, stats, isLoading, isFromCache, lastUpdate, refreshSilent } = useData();
-
-  if (isLoading && !siswa.length && !barang.length) return (
-    <div className="flex items-center justify-center h-64">
-      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card border border-card-border rounded-2xl p-5 shadow-xs overflow-hidden">
+      <SectionTitle>{title}</SectionTitle>
+      {children}
     </div>
   );
+}
+
+function StatusLegend({ data }: { data: { name: string; value: number }[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0) || 1;
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm">
+      {data.map((item) => (
+        <div key={item.name} className="flex items-center gap-2 font-medium text-muted-foreground">
+          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[item.name] || "#64748b" }} />
+          <span>{item.name}</span>
+          <span className="font-bold text-foreground">{item.value}</span>
+          <span className="text-xs">({Math.round((item.value / total) * 100)}%)</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyChart() {
+  return (
+    <div className="bg-card border border-card-border rounded-xl flex flex-col items-center justify-center py-16 text-muted-foreground">
+      <BarChart2 className="w-10 h-10 mb-3 opacity-30" />
+      <p className="text-sm font-medium">Belum ada data grafik</p>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const { siswa, barang, riwayat, stats, isFromCache, lastUpdate, refreshSilent } = useData();
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // Siswa dihitung langsung dari data tabel supaya aturan tahun Kadaluarsa selalu konsisten.
-  // 2026 aktif sampai akhir 2026, baru kadaluarsa mulai 2027.
   const totalSiswa = siswa.length;
   const siswaAktif = siswa.filter(isSiswaAktif).length;
   const siswaKadaluarsa = totalSiswa - siswaAktif;
@@ -56,9 +86,9 @@ export default function Dashboard() {
   const barangTersedia = stats?.barang_tersedia ?? (totalBarang - barangDipinjam);
   const totalRiwayat = stats?.total_riwayat ?? riwayat.length;
   const riwayatHariIni = stats?.riwayat_hari_ini ?? riwayat.filter(r => r.waktu?.startsWith(today)).length;
-  const modePinjam = stats?.total_pinjam ?? riwayat.filter(r => r.mode === "Pinjam").length;
-  const modeKembali = stats?.total_kembali ?? riwayat.filter(r => r.mode === "Kembali").length;
-  const modePerpanjang = stats?.total_perpanjang ?? riwayat.filter(r => r.mode === "Perpanjang").length;
+  const modePinjam = stats?.total_pinjam ?? riwayat.filter(r => String(r.mode || "").toLowerCase() === "pinjam").length;
+  const modeKembali = stats?.total_kembali ?? riwayat.filter(r => String(r.mode || "").toLowerCase() === "kembali").length;
+  const modePerpanjang = stats?.total_perpanjang ?? riwayat.filter(r => String(r.mode || "").toLowerCase() === "perpanjang").length;
 
   const kategoriData = stats?.kategori_barang
     ? Object.entries(stats.kategori_barang).map(([name, value]) => ({ name, value }))
@@ -66,6 +96,7 @@ export default function Dashboard() {
   const statusData = stats?.status_barang
     ? Object.entries(stats.status_barang).map(([name, value]) => ({ name, value }))
     : [{ name: "Tersedia", value: barangTersedia }, { name: "Dipinjam", value: barangDipinjam }];
+  const filteredStatusData = statusData.filter(s => s.value > 0);
   const modeData = stats?.mode_riwayat
     ? Object.entries(stats.mode_riwayat).map(([name, value]) => ({ name, value }))
     : [
@@ -129,70 +160,74 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         {aktivitasData.length > 0 && (
-          <div className="bg-card border border-card-border rounded-xl p-5 shadow-xs">
-            <SectionTitle>Aktivitas 7 Hari Terakhir</SectionTitle>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={aktivitasData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+          <ChartCard title="Aktivitas 7 Hari Terakhir">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={aktivitasData} margin={{ top: 8, right: 12, left: -16, bottom: 4 }}>
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="value" fill="#1d4ed8" radius={[4, 4, 0, 0]} name="Aktivitas" />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e2e8f0" }} />
+                <Bar dataKey="value" fill="#1d4ed8" radius={[6, 6, 0, 0]} name="Aktivitas" />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         )}
         {modeData.filter(m => m.value > 0).length > 0 && (
-          <div className="bg-card border border-card-border rounded-xl p-5 shadow-xs">
-            <SectionTitle>Mode Riwayat</SectionTitle>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={modeData.filter(m => m.value > 0)} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11}>
+          <ChartCard title="Mode Riwayat">
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
+                <Pie data={modeData.filter(m => m.value > 0)} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={78} innerRadius={44} paddingAngle={2}>
                   {modeData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e2e8f0" }} />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         )}
         {kategoriData.length > 0 && (
-          <div className="bg-card border border-card-border rounded-xl p-5 shadow-xs">
-            <SectionTitle>Kategori Barang</SectionTitle>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={kategoriData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+          <ChartCard title="Kategori Barang">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={kategoriData} margin={{ top: 8, right: 12, left: -16, bottom: 4 }}>
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Jumlah">
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e2e8f0" }} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} name="Jumlah">
                   {kategoriData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         )}
-        {statusData.filter(s => s.value > 0).length > 0 && (
-          <div className="bg-card border border-card-border rounded-xl p-5 shadow-xs">
-            <SectionTitle>Status Barang</SectionTitle>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={statusData.filter(s => s.value > 0)} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={11}>
-                  {statusData.map((_, i) => <Cell key={i} fill={["#16a34a", "#1d4ed8"][i % 2]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        {filteredStatusData.length > 0 && (
+          <ChartCard title="Status Barang">
+            <div className="flex flex-col items-center justify-center">
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart margin={{ top: 6, right: 20, bottom: 6, left: 20 }}>
+                  <Pie
+                    data={filteredStatusData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={82}
+                    innerRadius={48}
+                    paddingAngle={2}
+                    stroke="#ffffff"
+                    strokeWidth={3}
+                  >
+                    {filteredStatusData.map((entry) => (
+                      <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || "#64748b"} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e2e8f0" }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <StatusLegend data={filteredStatusData} />
+            </div>
+          </ChartCard>
         )}
-        {aktivitasData.length === 0 && modeData.every(m => m.value === 0) && (
-          <div className="lg:col-span-2 bg-card border border-card-border rounded-xl flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <BarChart2 className="w-10 h-10 mb-3 opacity-30" />
-            <p className="text-sm font-medium">Belum ada data grafik</p>
-          </div>
-        )}
+        {aktivitasData.length === 0 && modeData.every(m => m.value === 0) && <EmptyChart />}
       </div>
 
       {lastUpdate && (
