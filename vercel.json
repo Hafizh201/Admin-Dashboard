@@ -4,6 +4,19 @@
   "installCommand": "pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm vercel-build",
   "outputDirectory": "public",
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/admin/",
+      "destination": "/admin",
+      "permanent": false
+    },
+    {
+      "source": "/admin/:path+/",
+      "destination": "/admin/:path+",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/:path*",
