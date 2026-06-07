@@ -121,6 +121,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isAuthenticated || !pin) return;
 
+    // Saat pertama masuk halaman admin, data lama dari cache boleh disimpan di state,
+    // tapi tetap disembunyikan oleh skeleton sampai bootstrap server selesai.
+    setIsLoading(true);
+
     const cachedSiswa = getCache<Siswa[]>(CACHE_KEYS.data);
     const cachedBarang = getCache<Barang[]>(CACHE_KEYS.barang);
     const cachedRiwayat = getCache<Riwayat[]>(CACHE_KEYS.riwayat);
@@ -136,7 +140,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (cachedStats) setStats(cachedStats);
       if (cachedLastUpdate) setLastUpdate(cachedLastUpdate);
       setIsFromCache(true);
-      setIsLoading(false);
     }
 
     (async () => {
